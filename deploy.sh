@@ -35,7 +35,14 @@ echo -e "${BLUE}💬 Committing changes...${NC}"
 git commit -m "$1"
 
 echo -e "${BLUE}🚀 Pushing to GitHub...${NC}"
-git push
+
+# Check if upstream is set, if not set it
+if ! git rev-parse --abbrev-ref --symbolic-full-name @{u} > /dev/null 2>&1; then
+    echo -e "${YELLOW}   Setting upstream branch...${NC}"
+    git push --set-upstream origin main
+else
+    git push
+fi
 
 echo -e "${GREEN}✅ Changes pushed to GitHub successfully!${NC}"
 echo -e "${BLUE}🔄 Cloudflare Pages deployment will start automatically${NC}"
