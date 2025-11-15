@@ -217,20 +217,50 @@ class POSSystem {
                 download: true,
                 header: true,
                 skipEmptyLines: true,
+                transformHeader: (header) => {
+                    // Normalize header names - trim whitespace and handle variations
+                    return header.trim().toUpperCase();
+                },
                 complete: (results) => {
                     console.log('CSV parsed successfully:', results.data.length, 'rows');
                     
+                    // Debug: Log first row to see structure
+                    if (results.data.length > 0) {
+                        console.log('First row structure:', results.data[0]);
+                        console.log('Available columns:', Object.keys(results.data[0]));
+                    }
+                    
                     // Parse the CSV data into products
+                    // Headers should be normalized to "PRODUCT" and "RATE" by transformHeader
                     const newProducts = results.data
                         .filter(row => {
-                            // Check if row has PRODUCT and RATE columns
-                            const product = row.PRODUCT || row.product || '';
-                            const rate = row.RATE || row.rate || '';
-                            return product && product.trim() !== '' && rate && !isNaN(parseFloat(rate)) && parseFloat(rate) > 0;
+                            // Get product and rate - try exact match first, then variations
+                            const product = row.PRODUCT || row.product || row.Product || row['PRODUCT'] || row['product'] || '';
+                            const rate = row.RATE || row.rate || row.Rate || row['RATE'] || row['rate'] || '';
+                            
+                            // Convert to string and trim
+                            const productStr = String(product || '').trim();
+                            const rateStr = String(rate || '').trim();
+                            
+                            // Check if product name exists and rate is valid
+                            const rateNum = parseFloat(rateStr);
+                            const isValid = productStr !== '' && productStr.toLowerCase() !== 'product' && !isNaN(rateNum) && rateNum > 0;
+                            
+                            // Skip header row if it wasn't filtered out
+                            if (productStr.toUpperCase() === 'PRODUCT' || rateStr.toUpperCase() === 'RATE') {
+                                return false;
+                            }
+                            
+                            if (!isValid && productStr !== '') {
+                                console.debug('Skipped row:', { product: productStr, rate: rateStr });
+                            }
+                            
+                            return isValid;
                         })
                         .map(row => {
-                            const product = (row.PRODUCT || row.product || '').trim();
-                            const rate = parseFloat(row.RATE || row.rate || 0);
+                            // Get product and rate - try exact match first, then variations
+                            const product = (row.PRODUCT || row.product || row.Product || row['PRODUCT'] || row['product'] || '').trim();
+                            const rate = parseFloat(row.RATE || row.rate || row.Rate || row['RATE'] || row['rate'] || 0);
                             return {
                                 name: product,
                                 rate: rate
@@ -238,7 +268,10 @@ class POSSystem {
                         });
                     
                     if (newProducts.length === 0) {
-                        throw new Error('No products found in CSV. Please check the CSV format. Expected columns: PRODUCT, RATE');
+                        // More detailed error message
+                        const sampleRow = results.data[0] || {};
+                        const columns = Object.keys(sampleRow);
+                        throw new Error(`No products found in CSV. Please check the CSV format.\nExpected columns: PRODUCT, RATE\nFound columns: ${columns.join(', ')}\nFirst row: ${JSON.stringify(sampleRow)}`);
                     }
                     
                     // Update products
