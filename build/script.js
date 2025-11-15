@@ -1,5 +1,7 @@
 // Store Products CSV URL - will be replaced by generate-config.js
+//const STORE_PRODUCTS_URL = '{{STORE_PRODUCTS}}';
 const STORE_PRODUCTS_URL = '{{STORE_PRODUCTS}}';
+
 
 // Cache keys
 const PRODUCTS_CACHE_KEY = 'storeProductsCache';
@@ -566,7 +568,7 @@ class POSSystem {
         receiptContent.innerHTML = `
             <div class="receipt">
                 <div class="receipt-header">
-                    <h3>Convenience Store</h3>
+                    <h3>Shreeji's Store</h3>
                     <p class="receipt-date">${date}</p>
                 </div>
                 <div class="receipt-items">
