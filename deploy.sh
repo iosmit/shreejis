@@ -16,6 +16,18 @@ fi
 # Navigate to project root
 cd "$(dirname "$0")"
 
+echo -e "${BLUE}📦 Building project...${NC}"
+
+# Check if .env exists in build directory (for local build)
+if [ -f "build/.env" ]; then
+    echo -e "${BLUE}   Using local .env file${NC}"
+    cd build
+    node generate-config.js
+    cd ..
+else
+    echo -e "${YELLOW}   ⚠️  No local .env found - will use environment variables during Cloudflare Pages build${NC}"
+fi
+
 echo -e "${BLUE}📦 Staging changes...${NC}"
 git add .
 

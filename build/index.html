@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>POS Register</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #ffffff;
+            color: #000000;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            margin: 0;
+            padding: 0;
+        }
+        
+        /* Header */
+        .header {
+            background-color: #000000;
+            color: #ffffff;
+            padding: 24px 48px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            min-height: 80px;
+            margin: 24px;
+        }
+        
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            text-decoration: none;
+            color: #ffffff;
+            line-height: 1.2;
+        }
+        
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            padding: 80px 32px 48px 32px;
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        
+        @media (max-width: 768px) {
+            .header {
+                padding: 20px 24px;
+                margin: 16px;
+            }
+            
+            .main-content {
+                padding: 32px 16px;
+            }
+        }
+        
+        /* Search Container */
+        .search-container {
+            position: relative;
+            margin-bottom: 24px;
+        }
+        
+        #productSearch {
+            width: 100%;
+            padding: 12px 20px;
+            border: 2px solid #000000;
+            border-radius: 24px;
+            font-size: 16px;
+            background-color: #ffffff;
+            color: #000000;
+            font-family: inherit;
+            font-weight: 400;
+        }
+        
+        #productSearch:focus {
+            outline: none;
+            background-color: #ffffff;
+        }
+        
+        #productSearch::placeholder {
+            color: #666666;
+        }
+        
+        .search-results {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #ffffff;
+            border: 2px solid #000000;
+            border-radius: 24px;
+            margin-top: 8px;
+            max-height: 500px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+        }
+        
+        .search-result-item {
+            padding: 16px 20px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #e0e0e0;
+            transition: background-color 0.2s;
+        }
+        
+        .search-result-item:hover {
+            background-color: #f9f9f9;
+        }
+        
+        .search-result-item:last-child {
+            border-bottom: none;
+        }
+        
+        .product-name {
+            flex: 1;
+            font-weight: 500;
+            color: #000000;
+            font-size: 16px;
+        }
+        
+        .product-name mark {
+            background-color: #ffeb3b;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        
+        .product-rate {
+            color: #000000;
+            font-weight: 600;
+            margin-left: 10px;
+            font-size: 16px;
+        }
+        
+        .no-results {
+            padding: 20px;
+            text-align: center;
+            color: #666666;
+        }
+        
+        .more-results {
+            padding: 16px 20px;
+            text-align: center;
+            color: #666666;
+            font-size: 14px;
+            font-style: italic;
+            background-color: #f9f9f9;
+            border-top: 1px solid #e0e0e0;
+        }
+        
+        /* Cart Section */
+        .cart-section {
+            background-color: #ffffff;
+            border: none;
+            border-radius: 24px;
+            padding: 32px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* Products Section */
+        .products-section {
+            margin-bottom: 32px;
+        }
+        
+        .products-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #000000;
+            margin-bottom: 16px;
+        }
+        
+        .products-list {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 8px;
+        }
+        
+        .products-list::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .products-list::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        
+        .products-list::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        
+        .products-list::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        
+        .product-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background-color 0.2s;
+            border-radius: 8px;
+            margin-bottom: 4px;
+        }
+        
+        .product-item:hover {
+            background-color: #f9f9f9;
+        }
+        
+        .product-item:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+        
+        .product-item-name {
+            flex: 1;
+            font-weight: 500;
+            color: #000000;
+            font-size: 16px;
+        }
+        
+        .product-item-name mark {
+            background-color: #ffeb3b;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        
+        .product-item-rate {
+            color: #000000;
+            font-weight: 600;
+            margin-left: 10px;
+            font-size: 16px;
+        }
+        
+        .cart-divider {
+            height: 2px;
+            background-color: #000000;
+            margin: 32px 0;
+        }
+        
+        .cart-section h2 {
+            margin-bottom: 24px;
+            color: #000000;
+            font-size: 24px;
+            font-weight: 600;
+            padding-bottom: 16px;
+            border-bottom: 2px solid #000000;
+        }
+        
+        .cart-actions {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        
+        .cart-items {
+            flex: 1;
+            min-height: 200px;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-bottom: 24px;
+        }
+        
+        .empty-cart {
+            text-align: center;
+            color: #666666;
+            padding: 40px 20px;
+            font-style: italic;
+        }
+        
+        .cart-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 0;
+            border-bottom: 1px solid #e0e0e0;
+            gap: 16px;
+        }
+        
+        .cart-item:last-child {
+            border-bottom: none;
+        }
+        
+        .cart-item-info {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        
+        .cart-item-name {
+            font-weight: 500;
+            color: #000000;
+            font-size: 16px;
+        }
+        
+        .cart-item-rate {
+            font-size: 14px;
+            color: #666666;
+        }
+        
+        .cart-item-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .qty-btn {
+            width: 36px;
+            height: 36px;
+            border: 2px solid #000000;
+            background: #ffffff;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            color: #000000;
+            font-weight: 600;
+        }
+        
+        .qty-btn:hover {
+            background: #000000;
+            color: #ffffff;
+        }
+        
+        .cart-item-qty {
+            min-width: 36px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 16px;
+        }
+        
+        .cart-item-total {
+            min-width: 100px;
+            text-align: right;
+            font-weight: 600;
+            color: #000000;
+            font-size: 16px;
+        }
+        
+        .remove-btn {
+            width: 32px;
+            height: 32px;
+            border: 2px solid #000000;
+            background: #ffffff;
+            color: #000000;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 20px;
+            line-height: 1;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .remove-btn:hover {
+            background: #8B0000;
+            color: #ffffff;
+            border-color: #8B0000;
+        }
+        
+        .cart-total {
+            border-top: 2px solid #000000;
+            padding-top: 20px;
+            margin-bottom: 0;
+        }
+        
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .total-label {
+            font-size: 20px;
+            font-weight: 600;
+            color: #000000;
+        }
+        
+        .total-amount {
+            font-size: 24px;
+            font-weight: 700;
+            color: #000000;
+        }
+        
+        .btn {
+            flex: 1;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .btn-primary {
+            background: #000000;
+            color: #ffffff;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            opacity: 0.7;
+        }
+        
+        .btn-secondary {
+            background: #ffffff;
+            color: #000000;
+            border: 2px solid #000000;
+        }
+        
+        .btn-secondary:hover:not(:disabled) {
+            background: #000000;
+            color: #ffffff;
+        }
+        
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+        
+        .modal-content {
+            background-color: #ffffff;
+            margin: 5% auto;
+            padding: 0;
+            border-radius: 24px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+            border: 2px solid #000000;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 24px 32px;
+            border-bottom: 2px solid #000000;
+        }
+        
+        .modal-header h2 {
+            margin: 0;
+            color: #000000;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 32px;
+            cursor: pointer;
+            color: #000000;
+            line-height: 1;
+            transition: opacity 0.2s;
+        }
+        
+        .close-btn:hover {
+            opacity: 0.7;
+        }
+        
+        .receipt-content {
+            padding: 32px;
+        }
+        
+        .receipt {
+            text-align: center;
+        }
+        
+        .receipt-header {
+            margin-bottom: 24px;
+        }
+        
+        .receipt-header h3 {
+            font-size: 24px;
+            color: #000000;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        
+        .receipt-date {
+            color: #666666;
+            font-size: 14px;
+        }
+        
+        .receipt-items {
+            margin: 24px 0;
+        }
+        
+        .receipt-items table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .receipt-items th {
+            background: #000000;
+            color: #ffffff;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .receipt-items td {
+            padding: 16px 12px;
+            border-bottom: 1px solid #e0e0e0;
+            text-align: left;
+            font-size: 16px;
+        }
+        
+        .receipt-items td:nth-child(2),
+        .receipt-items td:nth-child(3),
+        .receipt-items td:nth-child(4) {
+            text-align: right;
+        }
+        
+        .receipt-items tr:hover {
+            background-color: #f9f9f9;
+        }
+        
+        .receipt-total {
+            margin: 24px 0;
+            padding-top: 24px;
+            border-top: 2px solid #000000;
+        }
+        
+        .receipt-total-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 20px;
+            font-weight: 700;
+            color: #000000;
+        }
+        
+        .receipt-footer {
+            margin-top: 24px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+            color: #666666;
+            font-style: italic;
+        }
+        
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            padding: 24px 32px;
+            border-top: 1px solid #e0e0e0;
+        }
+        
+        /* Loading Overlay */
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            z-index: 3000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: #ffffff;
+        }
+        
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #ffffff;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loading-overlay p {
+            font-size: 18px;
+            font-weight: 500;
+        }
+        
+        /* Print Styles */
+        @media print {
+            body {
+                background: white;
+            }
+            
+            .container > *:not(.modal) {
+                display: none;
+            }
+            
+            .modal {
+                display: block;
+                position: static;
+                background: white;
+            }
+            
+            .modal-content {
+                margin: 0;
+                box-shadow: none;
+                max-width: 100%;
+                border: none;
+            }
+            
+            .modal-header,
+            .modal-actions {
+                display: none;
+            }
+            
+            .receipt {
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <a href="index.html" class="logo">POS REGISTER</a>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Combined Cart Section with Search and Products -->
+        <section class="cart-section">
+            <!-- Cart -->
+            <h2>Cart</h2>
+            <div class="cart-actions">
+                <button id="checkoutBtn" class="btn btn-primary" disabled>Checkout</button>
+                <button id="clearCartBtn" class="btn btn-secondary" disabled>Clear Cart</button>
+            </div>
+            <div id="cartItems" class="cart-items">
+                <p class="empty-cart">No items in cart</p>
+            </div>
+            <div class="cart-total">
+                <div class="total-row">
+                    <span class="total-label">Total:</span>
+                    <span id="grandTotal" class="total-amount">₹0.00</span>
+                </div>
+            </div>
+
+            <!-- Divider -->
+            <div class="cart-divider"></div>
+
+            <!-- Search Bar -->
+            <div class="search-container">
+                <input 
+                    type="text" 
+                    id="productSearch" 
+                    placeholder="Search products or browse below..." 
+                    autocomplete="off"
+                    class="search-input"
+                >
+                <div id="searchResults" class="search-results"></div>
+            </div>
+
+            <!-- Products List -->
+            <div class="products-section">
+                <h3 class="products-title">Products</h3>
+                <div id="productsList" class="products-list">
+                    <!-- Products will be displayed here -->
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Receipt Modal -->
+    <div id="receiptModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Receipt</h2>
+                <button class="close-btn" id="closeReceipt">&times;</button>
+            </div>
+            <div class="receipt-content" id="receiptContent"></div>
+            <div class="modal-actions">
+                <button id="printReceipt" class="btn btn-primary">Print</button>
+                <button id="newTransaction" class="btn btn-secondary">New Transaction</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="spinner"></div>
+        <p>Loading products...</p>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
