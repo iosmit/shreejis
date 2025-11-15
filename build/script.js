@@ -1,6 +1,6 @@
-// Store Products CSV URL - will be replaced by generate-config.js
-//const STORE_PRODUCTS_URL = '{{STORE_PRODUCTS}}';
-const STORE_PRODUCTS_URL = '{{STORE_PRODUCTS}}';
+// Store Products CSV URL - using proxy endpoint to keep URL hidden
+// The proxy endpoint (/api/products) fetches from Google Sheets server-side
+const STORE_PRODUCTS_URL = '/api/products';
 
 
 // Cache keys

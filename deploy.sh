@@ -16,15 +16,8 @@ fi
 # Navigate to project root
 cd "$(dirname "$0")"
 
-# Restore placeholder in script.js before committing (keep source clean)
-if [ -f "build/script.js" ]; then
-    echo -e "${BLUE}📦 Restoring placeholder in script.js...${NC}"
-    cd build
-    # Restore the placeholder
-    sed -i.bak "s|const STORE_PRODUCTS_URL = '.*';|const STORE_PRODUCTS_URL = '{{STORE_PRODUCTS}}';|" script.js
-    rm -f script.js.bak
-    cd ..
-fi
+# No need to restore placeholder anymore - using proxy endpoint /api/products
+# The URL is now hidden in Cloudflare Functions
 
 echo -e "${BLUE}📦 Staging changes...${NC}"
 git add .
