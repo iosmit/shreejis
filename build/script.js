@@ -151,7 +151,7 @@ class POSSystem {
         loadingOverlay.style.display = 'flex';
 
         try {
-            if (!STORE_PRODUCTS_URL || STORE_PRODUCTS_URL === '{{STORE_PRODUCTS}}' || STORE_PRODUCTS_URL.trim() === '') {
+            if (!STORE_PRODUCTS_URL || STORE_PRODUCTS_URL === 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR7f9Ungw0dtrY5x0RUeCpxdqe5dRiOYWBoQMMUYESZil607WXSTVYKyBxchrK_vY-NUMdsb5H4Iwgv/pub?gid=1244670162&single=true&output=csv' || STORE_PRODUCTS_URL.trim() === '') {
                 throw new Error('STORE_PRODUCTS URL not configured. Please run generate-config.js or set environment variable.');
             }
 
