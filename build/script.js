@@ -26,22 +26,18 @@ class POSSystem {
         
         if (hasCache) {
             // Cache exists - use it immediately
-            console.log('Loaded products from cache');
             this.displayProductsList();
             this.handleSearch('');
             this.updateLastViewTime();
             
             // Check if cache is stale, if so fetch fresh data in background
             if (this.isCacheStale()) {
-                console.log('Cache is stale, fetching fresh data in background...');
                 this.loadProducts(true); // silent = true (no loading overlay)
             } else {
-                // Cache is fresh, but set up refresh for when it becomes stale
                 this.scheduleCacheRefresh();
             }
         } else {
             // No cache exists - fetch data first, then save to cache
-            console.log('No cache found, fetching products...');
             await this.loadProducts(false); // silent = false (show loading overlay)
         }
         
@@ -90,7 +86,6 @@ class POSSystem {
                 
                 // Schedule refresh for when cache becomes stale
                 this.cacheRefreshTimeout = setTimeout(() => {
-                    console.log('Cache became stale, refreshing in background...');
                     this.loadProducts(true); // silent refresh
                 }, timeUntilStale);
             }
@@ -108,7 +103,6 @@ class POSSystem {
         
         // Refresh cache every 5 minutes
         this.cacheRefreshInterval = setInterval(() => {
-            console.log('Periodic cache refresh (every 5 minutes)...');
             this.loadProducts(true); // silent refresh
         }, CACHE_DURATION_MS);
     }
@@ -140,10 +134,7 @@ class POSSystem {
                 return false;
             }
             
-            const data = JSON.parse(cachedData);
-            console.log('Loading products from cache:', data.length);
-            
-            this.products = data;
+            this.products = JSON.parse(cachedData);
             
             // Update last view time when loading from cache
             this.updateLastViewTime();
@@ -160,8 +151,7 @@ class POSSystem {
         try {
             localStorage.setItem(PRODUCTS_CACHE_KEY, JSON.stringify(products));
             localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
-            this.updateLastViewTime(); // Update last view time when saving fresh data
-            console.log('Saved products to cache:', products.length);
+            this.updateLastViewTime();
         } catch (error) {
             console.error('Error saving to cache:', error);
         }
@@ -210,8 +200,6 @@ class POSSystem {
         }
 
         try {
-            console.log('Fetching products from:', STORE_PRODUCTS_URL);
-            
             // Use PapaParse to fetch and parse CSV (handles redirects automatically)
             Papa.parse(STORE_PRODUCTS_URL, {
                 download: true,
@@ -222,67 +210,34 @@ class POSSystem {
                     return header.trim().toUpperCase();
                 },
                 complete: (results) => {
-                    console.log('CSV parsed successfully:', results.data.length, 'rows');
-                    
-                    // Debug: Log first row to see structure
-                    if (results.data.length > 0) {
-                        console.log('First row structure:', results.data[0]);
-                        console.log('Available columns:', Object.keys(results.data[0]));
-                    }
-                    
                     // Parse the CSV data into products
-                    // Headers should be normalized to "PRODUCT" and "RATE" by transformHeader
+                    // Headers are normalized to "PRODUCT" and "RATE" by transformHeader
                     const newProducts = results.data
                         .filter(row => {
-                            // Get product and rate - try exact match first, then variations
-                            const product = row.PRODUCT || row.product || row.Product || row['PRODUCT'] || row['product'] || '';
-                            const rate = row.RATE || row.rate || row.Rate || row['RATE'] || row['rate'] || '';
+                            const product = row.PRODUCT || '';
+                            const rate = row.RATE || '';
+                            const productStr = String(product).trim();
+                            const rateStr = String(rate).trim();
                             
-                            // Convert to string and trim
-                            const productStr = String(product || '').trim();
-                            const rateStr = String(rate || '').trim();
-                            
-                            // Check if product name exists and rate is valid
-                            const rateNum = parseFloat(rateStr);
-                            const isValid = productStr !== '' && productStr.toLowerCase() !== 'product' && !isNaN(rateNum) && rateNum > 0;
-                            
-                            // Skip header row if it wasn't filtered out
+                            // Skip header row
                             if (productStr.toUpperCase() === 'PRODUCT' || rateStr.toUpperCase() === 'RATE') {
                                 return false;
                             }
                             
-                            if (!isValid && productStr !== '') {
-                                console.debug('Skipped row:', { product: productStr, rate: rateStr });
-                            }
-                            
-                            return isValid;
+                            const rateNum = parseFloat(rateStr);
+                            return productStr !== '' && !isNaN(rateNum) && rateNum > 0;
                         })
-                        .map(row => {
-                            // Get product and rate - try exact match first, then variations
-                            const product = (row.PRODUCT || row.product || row.Product || row['PRODUCT'] || row['product'] || '').trim();
-                            const rate = parseFloat(row.RATE || row.rate || row.Rate || row['RATE'] || row['rate'] || 0);
-                            return {
-                                name: product,
-                                rate: rate
-                            };
-                        });
+                        .map(row => ({
+                            name: String(row.PRODUCT || '').trim(),
+                            rate: parseFloat(row.RATE || 0)
+                        }));
                     
                     if (newProducts.length === 0) {
-                        // More detailed error message
-                        const sampleRow = results.data[0] || {};
-                        const columns = Object.keys(sampleRow);
-                        throw new Error(`No products found in CSV. Please check the CSV format.\nExpected columns: PRODUCT, RATE\nFound columns: ${columns.join(', ')}\nFirst row: ${JSON.stringify(sampleRow)}`);
+                        throw new Error('No products found in CSV. Expected columns: PRODUCT, RATE');
                     }
                     
-                    // Update products
                     this.products = newProducts;
-                    
-                    // Save to cache
                     this.saveProductsToCache(this.products);
-                    
-                    console.log(`✓ Loaded ${this.products.length} products`);
-                    
-                    // Hide loading overlay
                     loadingOverlay.style.display = 'none';
                     
                     // Update UI (only if not silent, or if products changed)
@@ -294,10 +249,8 @@ class POSSystem {
                         const currentSearch = document.getElementById('productSearch').value;
                         this.displayProductsList();
                         this.handleSearch(currentSearch);
-                        console.log('Cache refreshed silently');
                     }
                     
-                    // Schedule next refresh
                     this.scheduleCacheRefresh();
                 },
                 error: (error) => {
@@ -306,7 +259,6 @@ class POSSystem {
                     
                     // If we have cached data, use it instead of showing error
                     if (this.cacheExists() && this.products.length > 0) {
-                        console.log('Using cached products due to fetch error');
                         if (!silent) {
                             this.displayProductsList();
                             this.handleSearch('');
@@ -326,7 +278,6 @@ class POSSystem {
             
             // If we have cached data, use it instead of showing error
             if (this.cacheExists() && this.products.length > 0) {
-                console.log('Using cached products due to error');
                 if (!silent) {
                     this.displayProductsList();
                     this.handleSearch('');
@@ -342,71 +293,6 @@ class POSSystem {
         }
     }
 
-    parseCSV(csvText) {
-        const lines = csvText.split('\n').filter(line => line.trim());
-        const products = [];
-        
-        // Skip header row (PRODUCT,RATE or SR.,PRODUCT,RATE,QUANTITY,TOTAL)
-        for (let i = 1; i < lines.length; i++) {
-            const line = lines[i].trim();
-            if (!line) continue;
-
-            // Parse CSV line (handling commas in product names)
-            const columns = this.parseCSVLine(line);
-            
-            let product, rate;
-            
-            // Handle two formats:
-            // Format 1: PRODUCT,RATE (2 columns)
-            // Format 2: SR.,PRODUCT,RATE,QUANTITY,TOTAL (5 columns)
-            if (columns.length >= 2) {
-                if (columns.length === 2) {
-                    // Format 1: PRODUCT,RATE
-                    product = columns[0]?.trim();
-                    rate = parseFloat(columns[1]?.trim());
-                } else if (columns.length >= 3) {
-                    // Format 2: SR.,PRODUCT,RATE,...
-                    product = columns[1]?.trim(); // Column B (PRODUCT)
-                    rate = parseFloat(columns[2]?.trim()); // Column C (RATE)
-                }
-                
-                // Skip rows with empty product or invalid rate
-                if (product && product.length > 0 && !isNaN(rate) && rate > 0) {
-                    products.push({
-                        name: product,
-                        rate: rate
-                    });
-                } else {
-                    // Debug: log skipped rows
-                    console.debug('Skipped row:', { product, rate, columns: columns.length });
-                }
-            }
-        }
-
-        return products;
-    }
-
-    parseCSVLine(line) {
-        const columns = [];
-        let current = '';
-        let inQuotes = false;
-
-        for (let i = 0; i < line.length; i++) {
-            const char = line[i];
-            
-            if (char === '"') {
-                inQuotes = !inQuotes;
-            } else if (char === ',' && !inQuotes) {
-                columns.push(current);
-                current = '';
-            } else {
-                current += char;
-            }
-        }
-        columns.push(current); // Add last column
-
-        return columns;
-    }
 
     searchResults = [];
 

@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "description": "Convenience Store POS System",
   "scripts": {
-    "build": "cd build && node generate-config.js",
     "dev": "node server.js",
     "start": "node server.js"
   },

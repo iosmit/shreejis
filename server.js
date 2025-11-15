@@ -24,8 +24,6 @@ app.get('/api/products', async (req, res) => {
             return res.status(500).json({ error: 'STORE_PRODUCTS URL not configured' });
         }
 
-        console.log('Fetching CSV from:', storeProductsUrl);
-        
         // Fetch CSV from Google Sheets (server-side, URL is hidden)
         const response = await fetch(storeProductsUrl);
         
@@ -34,7 +32,6 @@ app.get('/api/products', async (req, res) => {
         }
 
         const csvText = await response.text();
-        console.log('CSV fetched successfully, length:', csvText.length);
 
         // Return CSV with proper headers
         res.setHeader('Content-Type', 'text/csv');
