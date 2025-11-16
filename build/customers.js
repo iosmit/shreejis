@@ -1,6 +1,12 @@
 // Customers CSV URL - using proxy endpoint to keep URL hidden
 const CUSTOMERS_URL = '/api/customers';
 
+// Cache keys
+const CUSTOMERS_CACHE_KEY = 'customersCache';
+const CUSTOMERS_CACHE_KEY_PARSED = 'customersCache_parsed';
+const CUSTOMERS_CACHE_TIMESTAMP_KEY = 'customersCacheTimestamp';
+const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes in milliseconds
+
 class CustomersManager {
     constructor() {
         this.customers = [];
@@ -9,12 +15,198 @@ class CustomersManager {
         this.currentCustomer = null;
         this.currentReceipt = null;
         this.currentReceiptIndex = null;
+        this.cacheRefreshInterval = null;
         this.init();
     }
 
     async init() {
         this.setupEventListeners();
-        await this.loadCustomers();
+        
+        // Load from cache first
+        const hasCache = this.loadCustomersFromCache();
+        
+        if (!hasCache) {
+            await this.loadCustomers(true); // Load and cache
+        }
+        
+        // Fetch fresh data in background
+        this.loadCustomers(true).catch(error => {
+            console.warn('Background customers cache refresh failed:', error);
+        });
+        
+        // Set up periodic cache refresh (every 5 minutes)
+        this.setupPeriodicRefresh();
+    }
+    
+    // Set up periodic refresh every 5 minutes
+    setupPeriodicRefresh() {
+        // Clear any existing interval
+        if (this.cacheRefreshInterval) {
+            clearInterval(this.cacheRefreshInterval);
+        }
+        
+        // Refresh cache every 5 minutes - flush old cache and replace with fresh data
+        this.cacheRefreshInterval = setInterval(() => {
+            console.log('Periodic customers cache refresh triggered - flushing and replacing cache');
+            this.flushAndRefreshCache();
+        }, CACHE_DURATION_MS);
+    }
+    
+    // Flush old cache and replace with fresh data
+    async flushAndRefreshCache() {
+        try {
+            // Clear old cache
+            localStorage.removeItem(CUSTOMERS_CACHE_KEY);
+            localStorage.removeItem(CUSTOMERS_CACHE_KEY_PARSED);
+            localStorage.removeItem(CUSTOMERS_CACHE_TIMESTAMP_KEY);
+            
+            console.log('Customers cache flushed, fetching fresh data...');
+            
+            // Fetch fresh data and save to cache
+            await this.loadCustomers(true);
+            
+            console.log('Customers cache refreshed with fresh data');
+        } catch (error) {
+            console.error('Error flushing and refreshing customers cache:', error);
+        }
+    }
+    
+    // Load customers from cache
+    loadCustomersFromCache() {
+        try {
+            const cachedCustomers = localStorage.getItem(CUSTOMERS_CACHE_KEY_PARSED);
+            const cachedCsv = localStorage.getItem(CUSTOMERS_CACHE_KEY);
+            
+            if (cachedCustomers && cachedCsv) {
+                this.customers = JSON.parse(cachedCustomers);
+                this.filteredCustomers = [...this.customers];
+                console.log(`Loaded ${this.customers.length} customers from cache`);
+                this.displayCustomers();
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('Error loading customers from cache:', error);
+            return false;
+        }
+    }
+    
+    // Save customers to cache
+    saveCustomersToCache(csvText, customers) {
+        try {
+            localStorage.setItem(CUSTOMERS_CACHE_KEY, csvText);
+            localStorage.setItem(CUSTOMERS_CACHE_KEY_PARSED, JSON.stringify(customers));
+            localStorage.setItem(CUSTOMERS_CACHE_TIMESTAMP_KEY, Date.now().toString());
+            console.log(`Saved ${customers.length} customers to cache`);
+            return true;
+        } catch (error) {
+            console.error('Error saving customers to cache:', error);
+            return false;
+        }
+    }
+    
+    // Update customers cache with payment information
+    updateCustomersCacheWithPayment(customerName, receiptIndex, payments) {
+        try {
+            // Get cached CSV data
+            const cachedCsv = localStorage.getItem(CUSTOMERS_CACHE_KEY);
+            if (!cachedCsv) {
+                console.warn('No customers cache found to update');
+                return;
+            }
+            
+            // Parse the CSV
+            Papa.parse(cachedCsv, {
+                header: true,
+                skipEmptyLines: true,
+                complete: (results) => {
+                    // Find the customer row
+                    let customerRow = null;
+                    
+                    for (let i = 0; i < results.data.length; i++) {
+                        const row = results.data[i];
+                        const rowCustomerName = row.CUSTOMER || row.customer || row.Customer || '';
+                        if (rowCustomerName && rowCustomerName.trim().toUpperCase() === customerName.toUpperCase()) {
+                            customerRow = row;
+                            break;
+                        }
+                    }
+                    
+                    if (!customerRow) {
+                        console.warn('Customer not found in cache for payment update');
+                        return;
+                    }
+                    
+                    // Find receipt columns
+                    const receiptColumns = results.meta.fields.filter(f => f.toUpperCase().startsWith('RECEIPT'));
+                    if (receiptColumns.length === 0) {
+                        console.warn('No receipt columns found in cache');
+                        return;
+                    }
+                    
+                    // Get the receipt at the specified index (receiptIndex corresponds to column position)
+                    // Receipt columns are: RECEIPT (index 0), RECEIPT2 (index 1), etc.
+                    let receiptField = null;
+                    if (receiptIndex === 0) {
+                        receiptField = receiptColumns[0]; // First receipt column
+                    } else {
+                        // Find the receipt column at the specified index
+                        const receiptFieldName = receiptIndex === 1 ? 'RECEIPT' : `RECEIPT${receiptIndex}`;
+                        receiptField = receiptColumns.find(col => col.toUpperCase() === receiptFieldName.toUpperCase());
+                        if (!receiptField && receiptColumns[receiptIndex]) {
+                            receiptField = receiptColumns[receiptIndex];
+                        }
+                    }
+                    
+                    if (!receiptField || !customerRow[receiptField]) {
+                        console.warn('Receipt not found in cache at specified index');
+                        return;
+                    }
+                    
+                    // Parse existing receipt JSON
+                    let receiptData;
+                    try {
+                        const receiptJson = customerRow[receiptField];
+                        // Handle double-encoded JSON
+                        receiptData = typeof receiptJson === 'string' ? JSON.parse(receiptJson) : receiptJson;
+                        if (typeof receiptData === 'string') {
+                            receiptData = JSON.parse(receiptData);
+                        }
+                    } catch (e) {
+                        console.error('Error parsing receipt JSON from cache:', e);
+                        return;
+                    }
+                    
+                    // Update payment information
+                    receiptData.payments = {
+                        cash: payments.cash || 0,
+                        online: payments.online || 0
+                    };
+                    const totalPaid = receiptData.payments.cash + receiptData.payments.online;
+                    receiptData.remainingBalance = receiptData.grandTotal - totalPaid;
+                    
+                    // Save back to cache
+                    customerRow[receiptField] = JSON.stringify(receiptData);
+                    
+                    // Convert back to CSV and save
+                    const updatedCsv = Papa.unparse(results.data, {
+                        header: true,
+                        columns: results.meta.fields
+                    });
+                    
+                    // Update cache
+                    localStorage.setItem(CUSTOMERS_CACHE_KEY, updatedCsv);
+                    localStorage.setItem(CUSTOMERS_CACHE_TIMESTAMP_KEY, Date.now().toString());
+                    
+                    console.log('Updated customers cache with payment information');
+                },
+                error: (error) => {
+                    console.error('Error updating customers cache with payment:', error);
+                }
+            });
+        } catch (error) {
+            console.error('Error updating customers cache with payment:', error);
+        }
     }
 
     setupEventListeners() {
@@ -67,8 +259,10 @@ class CustomersManager {
         loadingOverlay.classList.remove('active');
     }
 
-    async loadCustomers() {
-        this.showLoading();
+    async loadCustomers(silent = false) {
+        if (!silent) {
+            this.showLoading();
+        }
         try {
             const response = await fetch(`${CUSTOMERS_URL}?t=${Date.now()}`);
             if (!response.ok) {
@@ -76,8 +270,6 @@ class CustomersManager {
             }
 
             const csvText = await response.text();
-            console.log('CSV response received, length:', csvText.length);
-            console.log('CSV first 200 chars:', csvText.substring(0, 200));
             
             Papa.parse(csvText, {
                 header: true,
@@ -87,17 +279,8 @@ class CustomersManager {
                 delimiter: ',',
                 newline: '\n',
                 complete: (results) => {
-                    console.log('CSV parsing results:', results);
-                    console.log('CSV meta:', results.meta);
-                    console.log('First row sample:', results.data[0]);
-                    
                     // Parse customers from CSV - extract unique customer names from CUSTOMER column
                     const customerSet = new Set();
-                    
-                    // Check what columns are available
-                    if (results.meta && results.meta.fields) {
-                        console.log('Available columns:', results.meta.fields);
-                    }
                     
                     results.data.forEach((row, index) => {
                         // Try different possible column names (case-insensitive)
@@ -121,12 +304,8 @@ class CustomersManager {
                         
                         if (trimmedName && trimmedName !== '' && trimmedName.toUpperCase() !== 'CUSTOMER') {
                             customerSet.add(trimmedName);
-                            console.log(`Found customer at row ${index}:`, trimmedName);
                         }
                     });
-
-                    console.log('Total unique customers found:', customerSet.size);
-                    console.log('Customers:', Array.from(customerSet));
 
                     this.customers = Array.from(customerSet).map(customerName => ({
                         name: customerName
@@ -134,40 +313,56 @@ class CustomersManager {
                     
                     // Initialize filtered customers with all customers
                     this.filteredCustomers = [...this.customers];
+                    
+                    // Save to cache
+                    this.saveCustomersToCache(csvText, this.customers);
 
                     if (this.customers.length === 0) {
-                        console.warn('No customers found. CSV data:', results.data);
-                        console.warn('CSV text sample:', csvText.substring(0, 500));
-                        console.warn('Available row keys:', results.data.length > 0 ? Object.keys(results.data[0]) : 'No data rows');
+                        console.warn('No customers found in CSV');
                     }
 
                     this.displayCustomers();
-                    this.hideLoading();
+                    if (!silent) {
+                        this.hideLoading();
+                    }
                 },
                 error: (error) => {
                     console.error('Error parsing customers CSV:', error);
-                    console.error('CSV text sample:', csvText.substring(0, 500));
-                    this.hideLoading();
-                    this.showError('Failed to load customers. Please try again.');
+                    if (!silent) {
+                        this.hideLoading();
+                        this.showError('Failed to load customers. Please try again.');
+                    }
                 }
             });
         } catch (error) {
             console.error('Error loading customers:', error);
-            this.hideLoading();
-            this.showError('Failed to load customers. Please check your connection.');
+            if (!silent) {
+                this.hideLoading();
+                this.showError('Failed to load customers. Please check your connection.');
+            }
         }
     }
 
     async loadReceipts(customerName) {
         this.showLoading();
         try {
-            // Load receipts from the same CSV that has customers
-            const response = await fetch(`${CUSTOMERS_URL}?t=${Date.now()}`);
-            if (!response.ok) {
-                throw new Error(`Failed to fetch receipts: ${response.status}`);
+            // Try to load from cache first
+            let csvText = localStorage.getItem(CUSTOMERS_CACHE_KEY);
+            
+            if (!csvText) {
+                // Load receipts from the same CSV that has customers
+                const response = await fetch(`${CUSTOMERS_URL}?t=${Date.now()}`);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch receipts: ${response.status}`);
+                }
+                csvText = await response.text();
+                // Save to cache
+                if (csvText) {
+                    localStorage.setItem(CUSTOMERS_CACHE_KEY, csvText);
+                }
+            } else {
+                console.log('Loading receipts from cache');
             }
-
-            const csvText = await response.text();
             
             Papa.parse(csvText, {
                 header: true,
@@ -510,6 +705,16 @@ class CustomersManager {
                     this.receipts[receiptIndex].payments = this.currentReceipt.payments;
                     this.receipts[receiptIndex].remainingBalance = this.currentReceipt.remainingBalance;
                 }
+                
+                // Update local cache with payment information
+                this.updateCustomersCacheWithPayment(
+                    this.currentCustomer,
+                    this.currentReceiptIndex,
+                    {
+                        cash: cashPayment,
+                        online: onlinePayment
+                    }
+                );
                 
                 // Refresh the receipts display to show updated payment info
                 this.displayReceipts();

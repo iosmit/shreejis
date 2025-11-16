@@ -5,7 +5,9 @@ const STORE_PRODUCTS_URL = '/api/products';
 
 // Cache keys
 const PRODUCTS_CACHE_KEY = 'storeProductsCache';
-const CACHE_TIMESTAMP_KEY = 'storeProductsCacheTimestamp';
+const CUSTOMERS_CACHE_KEY = 'customersCache';
+const PRODUCTS_CACHE_TIMESTAMP_KEY = 'storeProductsCacheTimestamp';
+const CUSTOMERS_CACHE_TIMESTAMP_KEY = 'customersCacheTimestamp';
 const LAST_VIEW_KEY = 'storeProductsLastView';
 const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes in milliseconds
 
@@ -22,32 +24,21 @@ class POSSystem {
     async init() {
         this.setupEventListeners();
         
-        // Load customers for autocomplete
-        this.loadCustomers();
+        // Load both products and customers from cache first, then fetch fresh data
+        const hasProductsCache = this.loadProductsFromCache();
+        const hasCustomersCache = this.loadCustomersFromCache();
         
-        // Step 1: Always check cache first on page load for immediate display
-        const hasCache = this.loadProductsFromCache();
-        
-        if (hasCache && this.products.length > 0) {
+        if (hasProductsCache && this.products.length > 0) {
             // Cache exists and has products - use it immediately
             this.handleSearch('');
             this.updateLastViewTime();
-            
-            // Always try to fetch fresh data on page load to ensure cache is up-to-date
-            // Do this in background (silent) so user can use cached data immediately
-            this.loadProductsWithRetry(true).catch(error => {
-                console.warn('Background cache refresh failed, using existing cache:', error);
-                // Cache is already loaded, so we're good
-            });
         } else {
             // No cache exists or cache is empty - fetch data first, then save to cache
-            // This is critical - we must populate cache on initial load
             await this.loadProductsWithRetry(false); // silent = false (show loading overlay)
             
             // Ensure cache was populated after initial load
             if (this.products.length === 0) {
                 console.error('Failed to load products on initial page load, retrying...');
-                // Try one more time to ensure cache is filled
                 await this.loadProductsWithRetry(false);
             }
             
@@ -60,19 +51,24 @@ class POSSystem {
                     console.warn('Cache verification failed after initial load, attempting to save again...');
                     this.saveProductsToCache(this.products);
                 }
-            } else {
-                console.error('⚠️ Products array is still empty after initial load attempts');
             }
         }
         
-        // Set up periodic cache refresh (every 5 minutes)
-        this.setupPeriodicRefresh();
-        
-        // Also ensure cache is refreshed periodically on page load
-        // If cache is fresh, schedule refresh for when it becomes stale
-        if (hasCache && this.products.length > 0 && !this.isCacheStale()) {
-            this.scheduleCacheRefresh();
+        // Load customers (from cache if available, otherwise fetch)
+        if (!hasCustomersCache) {
+            await this.loadCustomers(true); // Load and cache customers
         }
+        
+        // Fetch fresh data in background to update cache
+        this.loadProductsWithRetry(true).catch(error => {
+            console.warn('Background products cache refresh failed:', error);
+        });
+        this.loadCustomers(true).catch(error => {
+            console.warn('Background customers cache refresh failed:', error);
+        });
+        
+        // Set up periodic cache refresh (every 5 minutes) - flush and replace
+        this.setupPeriodicRefresh();
     }
     
     // Load products with retry logic
@@ -176,10 +172,39 @@ class POSSystem {
             clearInterval(this.cacheRefreshInterval);
         }
         
-        // Refresh cache every 5 minutes
+        // Refresh cache every 5 minutes - flush old cache and replace with fresh data
         this.cacheRefreshInterval = setInterval(() => {
-            this.loadProductsWithRetry(true); // silent refresh with retry
+            console.log('Periodic cache refresh triggered - flushing and replacing cache');
+            this.flushAndRefreshCache();
         }, CACHE_DURATION_MS);
+    }
+    
+    // Flush old cache and replace with fresh data
+    async flushAndRefreshCache() {
+        try {
+            // Clear old cache timestamps to force fresh fetch
+            localStorage.removeItem(PRODUCTS_CACHE_KEY);
+            localStorage.removeItem(CUSTOMERS_CACHE_KEY);
+            localStorage.removeItem(CUSTOMERS_CACHE_KEY + '_parsed');
+            localStorage.removeItem(PRODUCTS_CACHE_TIMESTAMP_KEY);
+            localStorage.removeItem(CUSTOMERS_CACHE_TIMESTAMP_KEY);
+            
+            console.log('Cache flushed, fetching fresh data...');
+            
+            // Fetch fresh data and save to cache
+            await Promise.all([
+                this.loadProductsWithRetry(true).catch(err => {
+                    console.error('Error refreshing products cache:', err);
+                }),
+                this.loadCustomers(true).catch(err => {
+                    console.error('Error refreshing customers cache:', err);
+                })
+            ]);
+            
+            console.log('Cache refreshed with fresh data');
+        } catch (error) {
+            console.error('Error flushing and refreshing cache:', error);
+        }
     }
     
     // Update last view timestamp
@@ -192,11 +217,23 @@ class POSSystem {
     }
     
     // Load customers from CSV for autocomplete
-    async loadCustomers() {
+    async loadCustomers(silent = false) {
         try {
+            // Try to load from cache first if not silent
+            if (!silent) {
+                const cached = this.loadCustomersFromCache();
+                if (cached && this.customers.length > 0) {
+                    return; // Use cached data
+                }
+            }
+            
             const response = await fetch('/api/customers?t=' + Date.now());
             if (!response.ok) {
                 console.warn('Failed to load customers for autocomplete');
+                // Try to use cache if fetch fails
+                if (!silent) {
+                    this.loadCustomersFromCache();
+                }
                 return;
             }
 
@@ -223,13 +260,169 @@ class POSSystem {
 
                     this.customers = Array.from(customerSet);
                     console.log(`Loaded ${this.customers.length} customers for autocomplete`);
+                    
+                    // Save to cache
+                    this.saveCustomersToCache(csvText, this.customers);
                 },
                 error: (error) => {
                     console.error('Error parsing customers CSV:', error);
+                    // Try to use cache on error
+                    if (!silent) {
+                        this.loadCustomersFromCache();
+                    }
                 }
             });
         } catch (error) {
             console.error('Error loading customers:', error);
+            // Try to use cache on error
+            if (!silent) {
+                this.loadCustomersFromCache();
+            }
+        }
+    }
+    
+    // Load customers from cache
+    loadCustomersFromCache() {
+        try {
+            const cachedCustomers = localStorage.getItem(CUSTOMERS_CACHE_KEY + '_parsed');
+            
+            if (cachedCustomers) {
+                this.customers = JSON.parse(cachedCustomers);
+                console.log(`Loaded ${this.customers.length} customers from cache`);
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('Error loading customers from cache:', error);
+            return false;
+        }
+    }
+    
+    // Save customers to cache
+    saveCustomersToCache(csvText, customers) {
+        try {
+            localStorage.setItem(CUSTOMERS_CACHE_KEY, csvText);
+            localStorage.setItem(CUSTOMERS_CACHE_KEY + '_parsed', JSON.stringify(customers));
+            localStorage.setItem(CUSTOMERS_CACHE_TIMESTAMP_KEY, Date.now().toString());
+            console.log(`Saved ${customers.length} customers to cache`);
+            return true;
+        } catch (error) {
+            console.error('Error saving customers to cache:', error);
+            return false;
+        }
+    }
+    
+    // Update customers cache with new receipt
+    updateCustomersCacheWithReceipt(receiptData) {
+        try {
+            // Get cached CSV data
+            const cachedCsv = localStorage.getItem(CUSTOMERS_CACHE_KEY);
+            if (!cachedCsv) {
+                console.warn('No customers cache found to update');
+                return;
+            }
+            
+            // Parse the CSV
+            Papa.parse(cachedCsv, {
+                header: true,
+                skipEmptyLines: true,
+                complete: (results) => {
+                    // Find the customer row or create new one
+                    let customerRow = null;
+                    let customerRowIndex = -1;
+                    
+                    for (let i = 0; i < results.data.length; i++) {
+                        const row = results.data[i];
+                        const customerName = row.CUSTOMER || row.customer || row.Customer || '';
+                        if (customerName && customerName.trim().toUpperCase() === receiptData.customerName.toUpperCase()) {
+                            customerRow = row;
+                            customerRowIndex = i;
+                            break;
+                        }
+                    }
+                    
+                    // If customer not found, create new row
+                    if (!customerRow) {
+                        customerRow = {};
+                        const customerField = results.meta.fields[0] || 'CUSTOMER';
+                        customerRow[customerField] = receiptData.customerName;
+                        results.data.push(customerRow);
+                        customerRowIndex = results.data.length - 1;
+                    }
+                    
+                    // Create receipt JSON
+                    const receiptJson = JSON.stringify({
+                        storeName: receiptData.storeName,
+                        customerName: receiptData.customerName,
+                        date: receiptData.date,
+                        time: receiptData.time,
+                        items: receiptData.items,
+                        grandTotal: receiptData.grandTotal,
+                        payments: {
+                            cash: 0,
+                            online: 0
+                        },
+                        remainingBalance: receiptData.grandTotal
+                    });
+                    
+                    // Find the first RECEIPT column (should be column 2, index 1)
+                    const receiptColumns = results.meta.fields.filter(f => f.toUpperCase().startsWith('RECEIPT'));
+                    if (receiptColumns.length === 0) {
+                        // No receipt columns, add RECEIPT column
+                        const newField = 'RECEIPT';
+                        results.meta.fields.push(newField);
+                        customerRow[newField] = receiptJson;
+                    } else {
+                        // Insert at position 1 (second column, after CUSTOMER)
+                        // Move existing receipt to next column if exists
+                        const receiptField = receiptColumns[0];
+                        if (customerRow[receiptField]) {
+                            // Find next empty receipt column or create one
+                            let nextIndex = 1;
+                            let nextField = `RECEIPT${nextIndex > 1 ? nextIndex : ''}`;
+                            while (customerRow[nextField] && nextIndex < 10) {
+                                nextIndex++;
+                                nextField = `RECEIPT${nextIndex > 1 ? nextIndex : ''}`;
+                            }
+                            if (!results.meta.fields.includes(nextField)) {
+                                results.meta.fields.push(nextField);
+                            }
+                            customerRow[nextField] = customerRow[receiptField];
+                        }
+                        customerRow[receiptField] = receiptJson;
+                    }
+                    
+                    // Convert back to CSV and save
+                    const updatedCsv = Papa.unparse(results.data, {
+                        header: true,
+                        columns: results.meta.fields
+                    });
+                    
+                    // Update cache
+                    localStorage.setItem(CUSTOMERS_CACHE_KEY, updatedCsv);
+                    localStorage.setItem(CUSTOMERS_CACHE_TIMESTAMP_KEY, Date.now().toString());
+                    
+                    // Update parsed customers list
+                    const customerSet = new Set();
+                    results.data.forEach((row) => {
+                        const customerName = row.CUSTOMER || row.customer || row.Customer || '';
+                        const trimmedName = String(customerName).trim();
+                        if (trimmedName && trimmedName !== '' && trimmedName.toUpperCase() !== 'CUSTOMER') {
+                            customerSet.add(trimmedName);
+                        }
+                    });
+                    
+                    this.customers = Array.from(customerSet);
+                    localStorage.setItem(CUSTOMERS_CACHE_KEY + '_parsed', JSON.stringify(this.customers));
+                    
+                    console.log('Updated customers cache with new receipt');
+                },
+                error: (error) => {
+                    console.error('Error updating customers cache:', error);
+                }
+            });
+        } catch (error) {
+            console.error('Error updating customers cache with receipt:', error);
         }
     }
 
@@ -989,6 +1182,9 @@ class POSSystem {
             
             const result = await response.json();
             console.log('Receipt saved to Google Sheets:', result);
+            
+            // Update local cache with new receipt
+            this.updateCustomersCacheWithReceipt(receiptData);
         } catch (error) {
             console.error('Error saving receipt to Google Sheets:', error);
             // Don't show error to user - receipt is still displayed
@@ -1268,4 +1464,5 @@ let pos;
 window.addEventListener('DOMContentLoaded', () => {
     pos = new POSSystem();
 });
+
 
