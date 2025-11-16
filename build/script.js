@@ -649,6 +649,11 @@ class POSSystem {
 
     clearCart() {
         this.cart = [];
+        // Clear customer name input
+        const customerNameInput = document.getElementById('customerName');
+        if (customerNameInput) {
+            customerNameInput.value = '';
+        }
         this.updateCartDisplay();
     }
 
@@ -765,6 +770,43 @@ class POSSystem {
         receiptContent.textContent = receiptLines.join('\n');
 
         modal.style.display = 'flex';
+        
+        // Save receipt to Google Sheets
+        this.saveReceiptToSheets({
+            storeName: storeName,
+            customerName: customerName,
+            date: dateStr,
+            time: timeStr,
+            items: cartItems.map(item => ({
+                name: item.name,
+                quantity: item.quantity,
+                rate: item.rate,
+                total: item.rate * item.quantity
+            })),
+            grandTotal: grandTotal
+        });
+    }
+    
+    async saveReceiptToSheets(receiptData) {
+        try {
+            const response = await fetch('/api/save-receipt', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(receiptData)
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to save receipt');
+            }
+            
+            const result = await response.json();
+            console.log('Receipt saved to Google Sheets:', result);
+        } catch (error) {
+            console.error('Error saving receipt to Google Sheets:', error);
+            // Don't show error to user - receipt is still displayed
+        }
     }
 
     closeReceipt() {

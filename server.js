@@ -13,6 +13,39 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
+// API endpoint to save receipt data to Google Sheets
+app.post('/api/save-receipt', async (req, res) => {
+    try {
+        const receiptData = req.body;
+        
+        // Get the Google Sheets webhook URL from environment
+        const sheetsWebhookUrl = process.env.SHEETS_WEBHOOK_URL;
+        
+        if (!sheetsWebhookUrl) {
+            console.error('SHEETS_WEBHOOK_URL not configured in environment');
+            return res.status(500).json({ error: 'SHEETS_WEBHOOK_URL not configured' });
+        }
+
+        // Send receipt data to Google Sheets via webhook
+        const response = await fetch(sheetsWebhookUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(receiptData)
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Failed to save receipt: ${response.status} ${response.statusText}`);
+        }
+
+        res.json({ success: true, message: 'Receipt saved successfully' });
+    } catch (error) {
+        console.error('Error saving receipt to Google Sheets:', error);
+        res.status(500).json({ error: error.message || 'Failed to save receipt' });
+    }
+});
+
 // Proxy endpoint to fetch CSV from Google Sheets (keeps URL hidden)
 // MUST be defined BEFORE static files and catch-all route
 app.get('/api/products', async (req, res) => {
