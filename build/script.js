@@ -294,6 +294,12 @@ class POSSystem {
             clearCartBtn.addEventListener('click', () => this.clearCart());
             closeReceipt.addEventListener('click', () => this.closeReceipt());
             printReceipt.addEventListener('click', () => window.print());
+            
+            // Add event listener for customer name input
+            const customerNameInput = document.getElementById('customerName');
+            if (customerNameInput) {
+                customerNameInput.addEventListener('input', () => this.updateCheckoutButtonState());
+            }
 
         // Close modal when clicking outside
         document.getElementById('receiptModal').addEventListener('click', (e) => {
@@ -607,12 +613,10 @@ class POSSystem {
 
     updateCartDisplay() {
         const cartItemsDiv = document.getElementById('cartItems');
-        const checkoutBtn = document.getElementById('checkoutBtn');
         const clearCartBtn = document.getElementById('clearCartBtn');
 
         if (this.cart.length === 0) {
             cartItemsDiv.innerHTML = '<p class="empty-cart">No items in cart</p>';
-            checkoutBtn.disabled = true;
             clearCartBtn.disabled = true;
         } else {
             cartItemsDiv.innerHTML = this.cart.map((item, index) => `
@@ -635,11 +639,22 @@ class POSSystem {
                     </div>
                 </div>
             `).join('');
-            checkoutBtn.disabled = false;
             clearCartBtn.disabled = false;
         }
 
         this.updateTotal();
+        this.updateCheckoutButtonState();
+    }
+    
+    updateCheckoutButtonState() {
+        const checkoutBtn = document.getElementById('checkoutBtn');
+        const customerNameInput = document.getElementById('customerName');
+        
+        const hasItems = this.cart.length > 0;
+        const hasCustomerName = customerNameInput && customerNameInput.value.trim().length > 0;
+        
+        // Checkout button is enabled only if cart has items AND customer name is provided
+        checkoutBtn.disabled = !(hasItems && hasCustomerName);
     }
 
     updateTotal() {
@@ -658,6 +673,18 @@ class POSSystem {
     }
 
     showReceipt() {
+        // Validate customer name before showing receipt
+        const customerNameInput = document.getElementById('customerName');
+        const customerNameTrimmed = customerNameInput ? customerNameInput.value.trim() : '';
+        
+        if (!customerNameTrimmed || customerNameTrimmed.length === 0) {
+            alert('Please enter a customer name before checkout.');
+            if (customerNameInput) {
+                customerNameInput.focus();
+            }
+            return;
+        }
+        
         const receiptContent = document.getElementById('receiptContent');
         const modal = document.getElementById('receiptModal');
         
@@ -722,9 +749,8 @@ class POSSystem {
         // Store name left-aligned (same position as date/time)
         const storeName = "SHREEJI'S STORE";
         
-        // Get customer name from input field and convert to uppercase
-        const customerNameInput = document.getElementById('customerName');
-        const customerName = customerNameInput ? customerNameInput.value.trim().toUpperCase() : '';
+        // Get customer name from input field and convert to uppercase (already validated above)
+        const customerName = customerNameTrimmed.toUpperCase();
 
         // Format total with proper alignment (match item line width)
         // Total line format: "Total" (left) + spaces + "₹XX.XX" (right aligned)

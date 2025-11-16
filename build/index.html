@@ -49,6 +49,30 @@
             line-height: 1.2;
         }
         
+        .header-actions {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+        
+        .customers-link {
+            color: #ffffff;
+            text-decoration: none;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: opacity 0.2s;
+            padding: 10px 20px;
+            border: 2px solid #ffffff;
+            border-radius: 12px;
+            font-weight: 500;
+        }
+        
+        .customers-link:hover {
+            opacity: 0.7;
+        }
+        
         /* Main Content */
         .main-content {
             flex: 1;
@@ -64,9 +88,29 @@
                 margin: 16px;
             }
             
-            .header .search-container {
-                max-width: 200px;
-                flex: 0 0 auto;
+            .header-actions {
+                flex-wrap: wrap;
+                gap: 12px;
+            }
+            
+            .customers-link {
+                font-size: 14px;
+                padding: 8px 16px;
+            }
+            
+            .input-fields-container {
+                flex-direction: column;
+                gap: 12px;
+            }
+            
+            /* On mobile, use HTML order (customer name first, then search) */
+            /* Lower order value = appears first in flexbox */
+            .customer-name-container {
+                order: -1 !important;
+            }
+            
+            .search-container {
+                order: 0 !important;
             }
             
             #productSearch {
@@ -117,16 +161,14 @@
         /* Search Container */
         .search-container {
             position: relative;
-            flex: 0 0 auto;
-            max-width: 400px;
             width: 100%;
         }
         
         #productSearch {
             width: 100%;
-            padding: 10px 18px;
-            border: 2px solid #ffffff;
-            border-radius: 0;
+            padding: 12px 20px;
+            border: 2px solid #000000;
+            border-radius: 12px;
             font-size: 16px;
             background-color: #ffffff;
             color: #000000;
@@ -137,6 +179,7 @@
         #productSearch:focus {
             outline: none;
             background-color: #ffffff;
+            border-color: #000000;
         }
         
         #productSearch::placeholder {
@@ -246,8 +289,20 @@
             margin-bottom: 24px;
         }
         
-        .customer-name-container {
+        .input-fields-container {
+            display: flex;
+            gap: 12px;
             margin-bottom: 24px;
+        }
+        
+        .customer-name-container {
+            flex: 1;
+            order: 2; /* Second on desktop */
+        }
+        
+        .search-container {
+            flex: 1;
+            order: 1; /* First on desktop */
         }
         
         .customer-name-input {
@@ -688,15 +743,8 @@
     <!-- Header -->
     <div class="header">
         <a href="index.html" class="logo">STORE</a>
-        <div class="search-container">
-            <input 
-                type="text" 
-                id="productSearch" 
-                placeholder="Search products..." 
-                autocomplete="off"
-                class="search-input"
-            >
-            <div id="searchResults" class="search-results"></div>
+        <div class="header-actions">
+            <a href="#" class="customers-link" id="customersBtn">Customers</a>
         </div>
     </div>
     
@@ -713,13 +761,26 @@
                 <button id="checkoutBtn" class="btn btn-primary" disabled>Checkout</button>
                 <button id="clearCartBtn" class="btn btn-secondary" disabled>Clear Cart</button>
             </div>
-            <div class="customer-name-container">
-                <input 
-                    type="text" 
-                    id="customerName" 
-                    placeholder="Customer Name (optional)" 
-                    class="customer-name-input"
-                >
+            <div class="input-fields-container">
+                <div class="customer-name-container">
+                    <input 
+                        type="text" 
+                        id="customerName" 
+                        placeholder="Customer Name (required)" 
+                        class="customer-name-input"
+                        required
+                    >
+                </div>
+                <div class="search-container">
+                    <input 
+                        type="text" 
+                        id="productSearch" 
+                        placeholder="Search products..." 
+                        autocomplete="off"
+                        class="search-input"
+                    >
+                    <div id="searchResults" class="search-results"></div>
+                </div>
             </div>
             <div id="cartItems" class="cart-items">
                 <p class="empty-cart">No items in cart</p>
