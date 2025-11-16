@@ -651,6 +651,10 @@ class POSSystem {
 
         // Store name left-aligned (same position as date/time)
         const storeName = "SHREEJI'S STORE";
+        
+        // Get customer name from input field and convert to uppercase
+        const customerNameInput = document.getElementById('customerName');
+        const customerName = customerNameInput ? customerNameInput.value.trim().toUpperCase() : '';
 
         // Format total with proper alignment (match item line width)
         // Total line format: "Total" (left) + spaces + "₹XX.XX" (right aligned)
@@ -677,6 +681,7 @@ class POSSystem {
         // Build receipt content without extra whitespace from template literal indentation
         const receiptLines = [
             storeName,
+            customerName ? `Customer: ${customerName}` : '',
             '',
             `Date: ${dateStr}`,
             `Time: ${timeStr}`,
