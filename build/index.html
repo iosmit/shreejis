@@ -81,16 +81,28 @@
             .modal-content {
                 width: 95%;
                 margin: 2% auto;
+                max-height: 95vh;
+                overflow-y: auto;
                 overflow-x: hidden;
+                -webkit-overflow-scrolling: touch;
             }
             
             .receipt-content {
-                padding: 20px 16px;
+                padding: 20px 16px 40px 16px;
                 font-size: 11px;
                 line-height: 1.6;
                 overflow-x: hidden;
                 word-wrap: break-word;
                 overflow-wrap: break-word;
+                min-height: auto;
+            }
+            
+            .modal-actions {
+                padding: 16px;
+            }
+            
+            .modal-content {
+                padding-bottom: 20px;
             }
         }
         
@@ -446,24 +458,11 @@
             overflow-y: auto;
             overflow-x: visible;
             border: 1px solid #d0d0d0;
-            border-bottom: none;
             box-shadow: 0 6px 20px rgba(0,0,0,0.1);
             position: relative;
-            padding-bottom: 25px;
-        }
-        
-        .receipt-jagged-edge {
-            position: absolute;
-            bottom: -15px;
-            left: 0;
-            right: 0;
-            height: 30px;
-            width: 100%;
-            background: #ffffff;
-            background-image: url("data:image/svg+xml,%3Csvg width='20' height='30' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolygon points='0,30 10,0 20,30' fill='%23ffffff'/%3E%3C/svg%3E");
-            background-size: 20px 30px;
-            background-repeat: repeat-x;
-            z-index: 1;
+            padding-bottom: 20px;
+            -webkit-overflow-scrolling: touch;
+            border-radius: 0;
         }
         
         .modal-header {
@@ -501,7 +500,7 @@
         }
         
         .receipt-content {
-            padding: 32px 28px;
+            padding: 32px 28px 32px 28px;
             font-family: 'Courier New', Courier, monospace;
             font-size: 13px;
             line-height: 1.9;
@@ -513,6 +512,7 @@
             margin: 0 auto;
             overflow-x: visible;
             letter-spacing: 0.1px;
+            min-height: auto;
         }
         
         .modal-actions {
@@ -648,7 +648,6 @@
                 <button class="close-btn" id="closeReceipt">&times;</button>
             </div>
             <div class="receipt-content" id="receiptContent"></div>
-            <div class="receipt-jagged-edge"></div>
         </div>
     </div>
 

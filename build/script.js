@@ -603,7 +603,18 @@ class POSSystem {
             hour12: true
         });
 
-        const grandTotal = this.cart.reduce((sum, item) => sum + (item.rate * item.quantity), 0);
+        // Ensure we're using the actual cart array - create a copy to avoid any issues
+        const cartItems = [...this.cart];
+        
+        // Verify cart has items
+        if (cartItems.length === 0) {
+            console.error('Cart is empty when generating receipt');
+            return;
+        }
+        
+        console.log(`Generating receipt with ${cartItems.length} items:`, cartItems.map(item => item.name));
+        
+        const grandTotal = cartItems.reduce((sum, item) => sum + (item.rate * item.quantity), 0);
 
         // Detect mobile screen
         const isMobile = window.innerWidth <= 768;
@@ -614,9 +625,17 @@ class POSSystem {
         const totalWidth = isMobile ? 8 : 10;
         const separatorWidth = isMobile ? 35 : 50;
 
-        // Format items for receipt - ensure everything fits on one line
-        const itemsText = this.cart.map(item => {
-            const name = item.name.length > nameWidth ? item.name.substring(0, nameWidth - 3) + '...' : item.name;
+        // Format items for receipt - ensure ALL items are included
+        const itemsText = cartItems.map((item, index) => {
+            // Ensure item has required properties
+            if (!item || !item.name || item.rate === undefined || item.quantity === undefined) {
+                console.warn(`Invalid cart item at index ${index}:`, item);
+                return null;
+            }
+            
+            // Trim and normalize the item name to remove extra spaces
+            const cleanName = item.name.trim().replace(/\s+/g, ' ');
+            const name = cleanName.length > nameWidth ? cleanName.substring(0, nameWidth - 3) + '...' : cleanName;
             const qty = item.quantity.toString();
             const rate = item.rate.toFixed(2);
             const total = (item.rate * item.quantity).toFixed(2);
@@ -628,7 +647,7 @@ class POSSystem {
             const totalPart = total.padStart(totalWidth);
             
             return `${namePart} ${qtyPart} x ${ratePart} = ${totalPart}`;
-        }).join('\n');
+        }).filter(line => line !== null).join('\n'); // Filter out any null entries
 
         // Store name left-aligned (same position as date/time)
         const storeName = "SHREEJI'S STORE";
@@ -641,22 +660,39 @@ class POSSystem {
         const totalLineWidth = nameWidth + 1 + 2 + 1 + 1 + 1 + rateWidth + 1 + 1 + 1 + totalWidth;
         const totalValue = totalValueStr.padStart(totalLineWidth - nameWidth);
 
-        receiptContent.textContent = `
-${storeName}
+        // Verify all items were included in receipt
+        const receiptItemLines = itemsText.split('\n').filter(line => line.trim().length > 0);
+        if (receiptItemLines.length !== cartItems.length) {
+            console.error(`Mismatch: Cart has ${cartItems.length} items but receipt has ${receiptItemLines.length} lines`);
+            console.log('Cart items:', cartItems.map(item => item.name));
+            console.log('Receipt lines:', receiptItemLines);
+        }
+        
+        // Verify total calculation
+        const calculatedTotal = cartItems.reduce((sum, item) => sum + (item.rate * item.quantity), 0);
+        if (Math.abs(calculatedTotal - grandTotal) > 0.01) {
+            console.warn(`Total mismatch: Calculated ${calculatedTotal} but grandTotal is ${grandTotal}`);
+        }
 
-Date: ${dateStr}
-Time: ${timeStr}
-
-${'·'.repeat(separatorWidth)}
-${isMobile ? 'Item           Qty  Rate    Total' : 'Item                  Qty    Rate      Total'}
-${'·'.repeat(separatorWidth)}
-${itemsText}
-${'·'.repeat(separatorWidth)}
-${totalLabel}${totalValue}
-${'·'.repeat(separatorWidth)}
-
-Thank you for your purchase!
-        `;
+        // Build receipt content without extra whitespace from template literal indentation
+        const receiptLines = [
+            storeName,
+            '',
+            `Date: ${dateStr}`,
+            `Time: ${timeStr}`,
+            '',
+            '·'.repeat(separatorWidth),
+            isMobile ? 'Item           Qty  Rate    Total' : 'Item                  Qty    Rate      Total',
+            '·'.repeat(separatorWidth),
+            itemsText,
+            '·'.repeat(separatorWidth),
+            `${totalLabel}${totalValue}`,
+            '·'.repeat(separatorWidth),
+            '',
+            'Thank you for your purchase!'
+        ];
+        
+        receiptContent.textContent = receiptLines.join('\n');
 
         modal.style.display = 'flex';
     }
