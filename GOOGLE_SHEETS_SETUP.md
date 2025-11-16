@@ -19,105 +19,290 @@ This guide will help you set up automatic saving of receipts to Google Sheets.
 ```javascript
 function doPost(e) {
   try {
-    // Get the specific sheet named "Customer Receipts"
-    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-    let sheet = spreadsheet.getSheetByName('Customer Receipts');
-    
-    // Create the sheet if it doesn't exist
-    if (!sheet) {
-      sheet = spreadsheet.insertSheet('Customer Receipts');
-      // Add headers: CUSTOMER | RECEIPT | RECEIPT | ...
-      sheet.getRange(1, 1).setValue('CUSTOMER');
-      sheet.getRange(1, 2).setValue('RECEIPT');
-      // Make header row bold
-      const headerRange = sheet.getRange(1, 1, 1, 2);
-      headerRange.setFontWeight('bold');
-    }
-    
     const data = JSON.parse(e.postData.contents);
+    const action = data.action;
     
-    // Get receipt data
-    const storeName = data.storeName || '';
-    const customerName = data.customerName || '';
-    const date = data.date || '';
-    const time = data.time || '';
-    const grandTotal = data.grandTotal || 0;
-    const items = data.items || [];
-    
-    // Create receipt JSON object
-    const receiptJson = JSON.stringify({
-      date: date,
-      time: time,
-      customerName: customerName || 'Walk-in',
-      items: items,
-      grandTotal: grandTotal,
-      storeName: storeName
-    });
-    
-    const displayCustomerName = customerName || 'Walk-in';
-    
-    // Find the customer row (row with customer name in column 1)
-    let customerRow = null;
-    const lastRow = sheet.getLastRow();
-    
-    if (lastRow >= 1) {
-      // Check all rows (starting from row 2, since row 1 is header)
-      for (let i = 2; i <= lastRow; i++) {
-        const rowCustomerName = sheet.getRange(i, 1).getValue();
-        if (rowCustomerName === displayCustomerName) {
-          customerRow = i;
-          break;
-        }
-      }
-    }
-    
-    if (customerRow) {
-      // Customer exists - shift all existing receipts to the right
-      // Latest receipt always goes in column 2
-      const lastCol = sheet.getLastColumn();
-      
-      // Shift all existing receipts one column to the right (from right to left)
-      for (let col = lastCol; col >= 2; col--) {
-        const sourceValue = sheet.getRange(customerRow, col).getValue();
-        if (sourceValue !== '' && sourceValue !== null) {
-          // Shift this receipt to the next column
-          sheet.getRange(customerRow, col + 1).setValue(sourceValue);
-        }
-      }
-      
-      // If we need a new receipt column, add header
-      const newLastCol = Math.max(lastCol + 1, 3); // At least column 3 after shift
-      if (newLastCol > lastCol) {
-        sheet.getRange(1, newLastCol).setValue('RECEIPT');
-        sheet.getRange(1, newLastCol).setFontWeight('bold');
-      }
-      
-      // Add new receipt in column 2 (latest receipt)
-      sheet.getRange(customerRow, 2).setValue(receiptJson);
+    if (action === 'updatePayment') {
+      return handleUpdatePayment(data);
     } else {
-      // New customer - add new row with customer name and first receipt
-      const newCustomerRow = lastRow + 1;
-      
-      // Add customer name in column 1
-      sheet.getRange(newCustomerRow, 1).setValue(displayCustomerName);
-      
-      // Ensure we have at least 2 columns (CUSTOMER and RECEIPT)
-      const lastCol = sheet.getLastColumn();
-      if (lastCol < 2) {
-        sheet.getRange(1, 2).setValue('RECEIPT');
-        sheet.getRange(1, 2).setFontWeight('bold');
-      }
-      
-      // Add receipt in column 2 (first receipt column)
-      sheet.getRange(newCustomerRow, 2).setValue(receiptJson);
+      // Default action: save receipt
+      return handleSaveReceipt(data);
+    }
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({success: false, error: error.toString()}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doGet(e) {
+  try {
+    const action = e.parameter.action;
+    
+    if (action === 'getReceipts') {
+      return handleGetReceipts(e.parameter.customer);
+    } else if (action === 'getAllCustomers') {
+      return handleGetAllCustomers();
     }
     
-    return ContentService.createTextOutput(JSON.stringify({success: true}))
+    return ContentService.createTextOutput(JSON.stringify({success: false, error: 'Invalid action'}))
       .setMimeType(ContentService.MimeType.JSON);
   } catch (error) {
     return ContentService.createTextOutput(JSON.stringify({success: false, error: error.toString()}))
       .setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+function handleSaveReceipt(data) {
+  // Get the specific sheet named "Customer Receipts"
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = spreadsheet.getSheetByName('Customer Receipts');
+  
+  // Create the sheet if it doesn't exist
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet('Customer Receipts');
+    // Add headers: CUSTOMER | RECEIPT | RECEIPT | ...
+    sheet.getRange(1, 1).setValue('CUSTOMER');
+    sheet.getRange(1, 2).setValue('RECEIPT');
+    // Make header row bold
+    const headerRange = sheet.getRange(1, 1, 1, 2);
+    headerRange.setFontWeight('bold');
+  }
+  
+  // Get receipt data
+  const storeName = data.storeName || '';
+  const customerName = data.customerName || '';
+  const date = data.date || '';
+  const time = data.time || '';
+  const grandTotal = data.grandTotal || 0;
+  const items = data.items || [];
+  
+  // Create receipt JSON object
+  const receiptJson = JSON.stringify({
+    date: date,
+    time: time,
+    customerName: customerName || 'Walk-in',
+    items: items,
+    grandTotal: grandTotal,
+    storeName: storeName
+  });
+  
+  const displayCustomerName = customerName || 'Walk-in';
+  
+  // Find the customer row (row with customer name in column 1)
+  let customerRow = null;
+  const lastRow = sheet.getLastRow();
+  
+  if (lastRow >= 1) {
+    // Check all rows (starting from row 2, since row 1 is header)
+    for (let i = 2; i <= lastRow; i++) {
+      const rowCustomerName = sheet.getRange(i, 1).getValue();
+      if (rowCustomerName === displayCustomerName) {
+        customerRow = i;
+        break;
+      }
+    }
+  }
+  
+  if (customerRow) {
+    // Customer exists - shift all existing receipts to the right
+    // Latest receipt always goes in column 2
+    const lastCol = sheet.getLastColumn();
+    
+    // Shift all existing receipts one column to the right (from right to left)
+    for (let col = lastCol; col >= 2; col--) {
+      const sourceValue = sheet.getRange(customerRow, col).getValue();
+      if (sourceValue !== '' && sourceValue !== null) {
+        // Shift this receipt to the next column
+        sheet.getRange(customerRow, col + 1).setValue(sourceValue);
+      }
+    }
+    
+    // If we need a new receipt column, add header
+    const newLastCol = Math.max(lastCol + 1, 3); // At least column 3 after shift
+    if (newLastCol > lastCol) {
+      sheet.getRange(1, newLastCol).setValue('RECEIPT');
+      sheet.getRange(1, newLastCol).setFontWeight('bold');
+    }
+    
+    // Add new receipt in column 2 (latest receipt)
+    sheet.getRange(customerRow, 2).setValue(receiptJson);
+  } else {
+    // New customer - add new row with customer name and first receipt
+    const newCustomerRow = lastRow + 1;
+    
+    // Add customer name in column 1
+    sheet.getRange(newCustomerRow, 1).setValue(displayCustomerName);
+    
+    // Ensure we have at least 2 columns (CUSTOMER and RECEIPT)
+    const lastCol = sheet.getLastColumn();
+    if (lastCol < 2) {
+      sheet.getRange(1, 2).setValue('RECEIPT');
+      sheet.getRange(1, 2).setFontWeight('bold');
+    }
+    
+    // Add receipt in column 2 (first receipt column)
+    sheet.getRange(newCustomerRow, 2).setValue(receiptJson);
+  }
+  
+  return ContentService.createTextOutput(JSON.stringify({success: true}))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function handleGetReceipts(customerName) {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = spreadsheet.getSheetByName('Customer Receipts');
+  
+  if (!sheet) {
+    return ContentService.createTextOutput(JSON.stringify({success: true, receipts: []}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    return ContentService.createTextOutput(JSON.stringify({success: true, receipts: []}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  // Find the customer row
+  let customerRow = null;
+  for (let i = 2; i <= lastRow; i++) {
+    const rowCustomerName = sheet.getRange(i, 1).getValue();
+    if (rowCustomerName === customerName) {
+      customerRow = i;
+      break;
+    }
+  }
+  
+  if (!customerRow) {
+    return ContentService.createTextOutput(JSON.stringify({success: true, receipts: []}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  // Get all receipts for this customer (starting from column 2)
+  const lastCol = sheet.getLastColumn();
+  const receipts = [];
+  
+  for (let col = 2; col <= lastCol; col++) {
+    const receiptValue = sheet.getRange(customerRow, col).getValue();
+    if (receiptValue && receiptValue !== '') {
+      try {
+        const receipt = JSON.parse(receiptValue);
+        receipts.push(receipt);
+      } catch (e) {
+        // Skip invalid JSON
+        console.error('Error parsing receipt JSON:', e);
+      }
+    }
+  }
+  
+  return ContentService.createTextOutput(JSON.stringify({success: true, receipts: receipts}))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function handleUpdatePayment(data) {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = spreadsheet.getSheetByName('Customer Receipts');
+  
+  if (!sheet) {
+    return ContentService.createTextOutput(JSON.stringify({success: false, error: 'Sheet not found'}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  const customerName = data.customerName;
+  const receiptIndex = data.receiptIndex;
+  const payments = data.payments;
+  
+  // Find the customer row
+  const lastRow = sheet.getLastRow();
+  let customerRow = null;
+  
+  for (let i = 2; i <= lastRow; i++) {
+    const rowCustomerName = sheet.getRange(i, 1).getValue();
+    if (rowCustomerName === customerName) {
+      customerRow = i;
+      break;
+    }
+  }
+  
+  if (!customerRow) {
+    return ContentService.createTextOutput(JSON.stringify({success: false, error: 'Customer not found'}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  // Get all receipts for this customer
+  const lastCol = sheet.getLastColumn();
+  const receipts = [];
+  const receiptColumns = [];
+  
+  for (let col = 2; col <= lastCol; col++) {
+    const receiptValue = sheet.getRange(customerRow, col).getValue();
+    if (receiptValue && receiptValue !== '') {
+      try {
+        const receipt = JSON.parse(receiptValue);
+        receipts.push(receipt);
+        receiptColumns.push(col);
+      } catch (e) {
+        // Skip invalid JSON
+      }
+    }
+  }
+  
+  if (receiptIndex < 0 || receiptIndex >= receipts.length) {
+    return ContentService.createTextOutput(JSON.stringify({success: false, error: 'Invalid receipt index'}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  // Update the receipt with payment information
+  const receipt = receipts[receiptIndex];
+  
+  // Merge payment data into existing receipt (preserve existing data)
+  if (!receipt.payments) {
+    receipt.payments = {};
+  }
+  receipt.payments.cash = payments.cash || 0;
+  receipt.payments.online = payments.online || 0;
+  
+  // Calculate remaining balance
+  const totalPaid = (receipt.payments.cash || 0) + (receipt.payments.online || 0);
+  receipt.remainingBalance = receipt.grandTotal - totalPaid;
+  
+  // Save the updated receipt back to the sheet
+  const targetCol = receiptColumns[receiptIndex];
+  sheet.getRange(customerRow, targetCol).setValue(JSON.stringify(receipt));
+  
+  return ContentService.createTextOutput(JSON.stringify({success: true}))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function handleGetAllCustomers() {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = spreadsheet.getSheetByName('Customer Receipts');
+  
+  if (!sheet) {
+    return ContentService.createTextOutput(JSON.stringify({success: true, customers: []}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    return ContentService.createTextOutput(JSON.stringify({success: true, customers: []}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  // Get all customer names from column 1 (starting from row 2)
+  const customers = [];
+  const seen = new Set();
+  
+  for (let i = 2; i <= lastRow; i++) {
+    const customerName = sheet.getRange(i, 1).getValue();
+    if (customerName && customerName !== '' && !seen.has(customerName)) {
+      seen.add(customerName);
+      customers.push(customerName);
+    }
+  }
+  
+  return ContentService.createTextOutput(JSON.stringify({success: true, customers: customers}))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 ```
 
