@@ -1167,26 +1167,73 @@ class POSSystem {
     
     async saveReceiptToSheets(receiptData) {
         try {
-            const response = await fetch('/api/save-receipt', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(receiptData)
-            });
+            console.log('Attempting to save receipt to Google Sheets...', receiptData);
             
-            if (!response.ok) {
-                throw new Error('Failed to save receipt');
+            // Create abort controller for timeout (mobile networks can be slow/unreliable)
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => {
+                console.warn('Request timeout - aborting save receipt request');
+                controller.abort();
+            }, 30000); // 30 second timeout
+            
+            try {
+                const response = await fetch('/api/save-receipt', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(receiptData),
+                    signal: controller.signal,
+                    // Ensure request doesn't get cached on mobile
+                    cache: 'no-store'
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Failed to save receipt - Response not OK:', response.status, errorText);
+                    throw new Error(`Failed to save receipt: ${response.status} ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                
+                // Check if the response indicates success
+                if (result.success !== false) {
+                    console.log('Receipt saved to Google Sheets:', result);
+                    // Update local cache with new receipt
+                    this.updateCustomersCacheWithReceipt(receiptData);
+                } else {
+                    console.error('Google Sheets returned error:', result.error);
+                    throw new Error(result.error || 'Failed to save receipt');
+                }
+            } catch (fetchError) {
+                clearTimeout(timeoutId);
+                
+                // Check if it's an abort error (timeout)
+                if (fetchError.name === 'AbortError') {
+                    console.error('Request timed out - this may be a mobile network issue');
+                }
+                
+                throw fetchError;
             }
-            
-            const result = await response.json();
-            console.log('Receipt saved to Google Sheets:', result);
-            
-            // Update local cache with new receipt
-            this.updateCustomersCacheWithReceipt(receiptData);
         } catch (error) {
             console.error('Error saving receipt to Google Sheets:', error);
-            // Don't show error to user - receipt is still displayed
+            console.error('Error details:', {
+                name: error.name,
+                message: error.message,
+                stack: error.stack
+            });
+            
+            // On mobile, network errors are more common - log but don't block user
+            // The receipt is still displayed, so user can see it
+            // Try to update cache anyway so data isn't lost
+            try {
+                this.updateCustomersCacheWithReceipt(receiptData);
+                console.log('Receipt saved to local cache as fallback');
+            } catch (cacheError) {
+                console.error('Failed to save to cache as well:', cacheError);
+            }
         }
     }
 

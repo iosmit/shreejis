@@ -18,31 +18,62 @@ app.post('/api/save-receipt', async (req, res) => {
     try {
         const receiptData = req.body;
         
+        console.log('Received receipt data:', JSON.stringify(receiptData).substring(0, 200));
+        
         // Get the Google Sheets webhook URL from environment
         const sheetsWebhookUrl = process.env.SHEETS_WEBHOOK_URL;
         
         if (!sheetsWebhookUrl) {
             console.error('SHEETS_WEBHOOK_URL not configured in environment');
-            return res.status(500).json({ error: 'SHEETS_WEBHOOK_URL not configured' });
+            return res.status(500).json({ success: false, error: 'SHEETS_WEBHOOK_URL not configured' });
         }
 
-        // Send receipt data to Google Sheets via webhook
-        const response = await fetch(sheetsWebhookUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(receiptData)
-        });
+        console.log('Sending receipt to Google Sheets webhook...');
         
-        if (!response.ok) {
-            throw new Error(`Failed to save receipt: ${response.status} ${response.statusText}`);
-        }
+        // Send receipt data to Google Sheets via webhook
+        // Add timeout and better error handling for mobile
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 second timeout
+        
+        try {
+            const response = await fetch(sheetsWebhookUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'Mozilla/5.0 (compatible; POS-System/1.0)'
+                },
+                body: JSON.stringify(receiptData),
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Google Sheets webhook returned error:', response.status, errorText);
+                throw new Error(`Failed to save receipt: ${response.status} ${response.statusText}`);
+            }
 
-        res.json({ success: true, message: 'Receipt saved successfully' });
+            const result = await response.json();
+            console.log('Receipt saved successfully to Google Sheets:', result);
+            res.json({ success: true, message: 'Receipt saved successfully', ...result });
+        } catch (fetchError) {
+            clearTimeout(timeoutId);
+            
+            if (fetchError.name === 'AbortError') {
+                console.error('Request to Google Sheets timed out');
+                throw new Error('Request timed out - please check your network connection');
+            }
+            
+            throw fetchError;
+        }
     } catch (error) {
         console.error('Error saving receipt to Google Sheets:', error);
-        res.status(500).json({ error: error.message || 'Failed to save receipt' });
+        console.error('Error stack:', error.stack);
+        res.status(500).json({ 
+            success: false,
+            error: error.message || 'Failed to save receipt' 
+        });
     }
 });
 
