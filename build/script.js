@@ -1025,18 +1025,104 @@ class POSSystem {
             // Wait a bit for any rendering to complete
             await new Promise(resolve => setTimeout(resolve, 200));
             
-            // Capture the receipt content as canvas
-            const canvas = await html2canvas(receiptContent, {
-                backgroundColor: '#ffffff',
-                scale: 2, // Higher quality
-                logging: false,
-                useCORS: true,
-                allowTaint: false,
-                windowWidth: receiptContent.scrollWidth,
-                windowHeight: receiptContent.scrollHeight
-            });
+            // Temporarily ensure receipt content is fully visible and not clipped
+            const originalOverflow = receiptContent.style.overflow;
+            const originalOverflowX = receiptContent.style.overflowX;
+            const originalOverflowY = receiptContent.style.overflowY;
+            const originalWidth = receiptContent.style.width;
+            const originalMaxWidth = receiptContent.style.maxWidth;
+            const originalBoxSizing = receiptContent.style.boxSizing;
             
-            // Convert canvas to blob
+            // Make receipt content fully visible for capture
+            receiptContent.style.overflow = 'visible';
+            receiptContent.style.overflowX = 'visible';
+            receiptContent.style.overflowY = 'visible';
+            receiptContent.style.width = 'auto';
+            receiptContent.style.maxWidth = 'none';
+            receiptContent.style.boxSizing = 'content-box';
+            
+            // Also ensure modal content doesn't clip
+            const modalContent = modal.querySelector('.modal-content');
+            let canvas;
+            
+            if (modalContent) {
+                const originalModalOverflow = modalContent.style.overflow;
+                const originalModalOverflowX = modalContent.style.overflowX;
+                const originalModalWidth = modalContent.style.width;
+                const originalModalMaxWidth = modalContent.style.maxWidth;
+                
+                modalContent.style.overflow = 'visible';
+                modalContent.style.overflowX = 'visible';
+                modalContent.style.width = 'auto';
+                modalContent.style.maxWidth = 'none';
+                
+                // Wait for layout to update
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                // Get the actual dimensions after making it visible
+                const receiptWidth = Math.max(
+                    receiptContent.scrollWidth,
+                    receiptContent.offsetWidth,
+                    receiptContent.getBoundingClientRect().width
+                );
+                const receiptHeight = Math.max(
+                    receiptContent.scrollHeight,
+                    receiptContent.offsetHeight,
+                    receiptContent.getBoundingClientRect().height
+                );
+                
+                // Capture the receipt content as canvas
+                canvas = await html2canvas(receiptContent, {
+                    backgroundColor: '#ffffff',
+                    scale: 2, // Higher quality
+                    logging: false,
+                    useCORS: true,
+                    allowTaint: false,
+                    width: receiptWidth,
+                    height: receiptHeight,
+                    x: 0,
+                    y: 0,
+                    scrollX: 0,
+                    scrollY: 0
+                });
+                
+                // Restore modal content styles
+                modalContent.style.overflow = originalModalOverflow;
+                modalContent.style.overflowX = originalModalOverflowX;
+                modalContent.style.width = originalModalWidth;
+                modalContent.style.maxWidth = originalModalMaxWidth;
+            } else {
+                // Fallback if modal-content not found
+                const receiptWidth = Math.max(
+                    receiptContent.scrollWidth,
+                    receiptContent.offsetWidth,
+                    receiptContent.getBoundingClientRect().width
+                );
+                const receiptHeight = Math.max(
+                    receiptContent.scrollHeight,
+                    receiptContent.offsetHeight,
+                    receiptContent.getBoundingClientRect().height
+                );
+                
+                canvas = await html2canvas(receiptContent, {
+                    backgroundColor: '#ffffff',
+                    scale: 2,
+                    logging: false,
+                    useCORS: true,
+                    allowTaint: false,
+                    width: receiptWidth,
+                    height: receiptHeight
+                });
+            }
+            
+            // Restore receipt content styles
+            receiptContent.style.overflow = originalOverflow;
+            receiptContent.style.overflowX = originalOverflowX;
+            receiptContent.style.overflowY = originalOverflowY;
+            receiptContent.style.width = originalWidth;
+            receiptContent.style.maxWidth = originalMaxWidth;
+            receiptContent.style.boxSizing = originalBoxSizing;
+            
             canvas.toBlob(async (blob) => {
                 if (!blob) {
                     alert('Failed to generate receipt image');
