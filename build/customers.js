@@ -918,7 +918,12 @@ class CustomersManager {
             if (result.success) {
                 // Update local cache FIRST before modifying arrays
                 // This ensures cache is updated before any reload happens
-                this.updateCustomersCacheAfterDelete(customerName, actualReceiptIndex);
+                // Update local cache by removing the receipt
+                // Pass receipt data (date, time) to help identify the correct receipt in cache
+                this.updateCustomersCacheAfterDelete(customerName, actualReceiptIndex, {
+                    date: receiptToDelete.date,
+                    time: receiptToDelete.time
+                });
                 
                 // Immediately remove the receipt from local arrays
                 // receiptToDelete is from sortedReceipts which is a spread of this.receipts
@@ -1027,7 +1032,8 @@ class CustomersManager {
     }
     
     // Update customers cache after deleting a receipt
-    updateCustomersCacheAfterDelete(customerName, receiptIndex) {
+    // receiptToDeleteData should contain date and time to uniquely identify the receipt
+    updateCustomersCacheAfterDelete(customerName, receiptIndex, receiptToDeleteData = null) {
         try {
             // Get cached CSV data
             const cachedCsv = localStorage.getItem(CUSTOMERS_CACHE_KEY);
@@ -1065,35 +1071,79 @@ class CustomersManager {
                         return;
                     }
                     
-                    // Find the receipt at the specified index
+                    // Find the receipt to delete
+                    // First try by index, but also try to match by date/time if provided
                     let receiptField = null;
-                    if (receiptIndex === 0) {
-                        receiptField = receiptColumns[0];
-                    } else {
-                        const receiptFieldName = receiptIndex === 1 ? 'RECEIPT' : `RECEIPT${receiptIndex}`;
-                        receiptField = receiptColumns.find(col => col.toUpperCase() === receiptFieldName.toUpperCase());
-                        if (!receiptField && receiptColumns[receiptIndex]) {
-                            receiptField = receiptColumns[receiptIndex];
+                    let receiptFieldIndex = -1;
+                    
+                    // Sort receipt columns to match the order used when loading
+                    const sortedReceiptColumns = receiptColumns.sort((a, b) => {
+                        // Keep CUSTOMER first, then RECEIPT columns in order
+                        if (a.toUpperCase() === 'CUSTOMER') return -1;
+                        if (b.toUpperCase() === 'CUSTOMER') return 1;
+                        return a.localeCompare(b);
+                    });
+                    
+                    // Count non-empty receipts to find the one at receiptIndex
+                    let receiptCount = 0;
+                    for (const col of sortedReceiptColumns) {
+                        const receiptValue = customerRow[col];
+                        if (receiptValue && receiptValue.trim() !== '') {
+                            // If we have receipt data to match, try to parse and match by date/time
+                            if (receiptToDeleteData && receiptToDeleteData.date && receiptToDeleteData.time) {
+                                try {
+                                    let receiptJson = receiptValue.trim();
+                                    if (receiptJson.startsWith('"') && receiptJson.endsWith('"')) {
+                                        receiptJson = receiptJson.slice(1, -1);
+                                    }
+                                    receiptJson = receiptJson.replace(/""/g, '"');
+                                    const receipt = JSON.parse(receiptJson);
+                                    
+                                    // Match by date and time
+                                    if (receipt.date === receiptToDeleteData.date && receipt.time === receiptToDeleteData.time) {
+                                        receiptField = col;
+                                        receiptFieldIndex = results.meta.fields.indexOf(col);
+                                        break;
+                                    }
+                                } catch (e) {
+                                    // If parsing fails, continue
+                                }
+                            }
+                            
+                            // If we haven't found a match yet and this is the receipt at receiptIndex
+                            if (!receiptField && receiptCount === receiptIndex) {
+                                receiptField = col;
+                                receiptFieldIndex = results.meta.fields.indexOf(col);
+                            }
+                            
+                            receiptCount++;
                         }
                     }
                     
-                    if (!receiptField) {
-                        console.warn('Receipt column not found at specified index');
+                    if (!receiptField || receiptFieldIndex === -1) {
+                        console.warn('Receipt column not found at specified index or by date/time match');
                         return;
                     }
+                    
+                    console.log('Deleting receipt from cache:', {
+                        receiptIndex,
+                        receiptField,
+                        date: receiptToDeleteData?.date,
+                        time: receiptToDeleteData?.time
+                    });
                     
                     // Clear the receipt cell
                     customerRow[receiptField] = '';
                     
                     // Shift remaining receipts to fill the gap (move receipts from right to left)
-                    const receiptFieldIndex = results.meta.fields.indexOf(receiptField);
                     for (let i = receiptFieldIndex + 1; i < results.meta.fields.length; i++) {
                         const nextField = results.meta.fields[i];
                         if (nextField && nextField.toUpperCase().startsWith('RECEIPT')) {
-                            if (customerRow[nextField]) {
+                            if (customerRow[nextField] && customerRow[nextField].trim() !== '') {
                                 customerRow[receiptField] = customerRow[nextField];
                                 customerRow[nextField] = '';
                                 receiptField = nextField;
+                                receiptFieldIndex = i;
                             }
                         }
                     }
