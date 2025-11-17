@@ -343,6 +343,39 @@ class CustomersManager {
                 this.closePaymentModal();
             }
         });
+        
+        // Receipt view modal event listeners
+        const closeReceiptView = document.getElementById('closeReceiptView');
+        const printReceiptView = document.getElementById('printReceiptView');
+        const shareReceiptView = document.getElementById('shareReceiptView');
+        const receiptViewModal = document.getElementById('receiptViewModal');
+        
+        if (closeReceiptView) {
+            closeReceiptView.addEventListener('click', () => {
+                this.closeReceiptView();
+            });
+        }
+        
+        if (printReceiptView) {
+            printReceiptView.addEventListener('click', () => {
+                window.print();
+            });
+        }
+        
+        if (shareReceiptView) {
+            shareReceiptView.addEventListener('click', () => {
+                this.shareReceiptView();
+            });
+        }
+        
+        // Close receipt modal when clicking outside
+        if (receiptViewModal) {
+            receiptViewModal.addEventListener('click', (e) => {
+                if (e.target === receiptViewModal) {
+                    this.closeReceiptView();
+                }
+            });
+        }
     }
 
     showLoading() {
@@ -875,15 +908,20 @@ class CustomersManager {
                                 <div class="receipt-date">${this.escapeHtml(receipt.date || 'N/A')}</div>
                                 <div class="receipt-time">${this.escapeHtml(receipt.time || '')}</div>
                             </div>
-                            <div class="receipt-total">₹${this.formatCurrency(receipt.grandTotal || 0)}</div>
+                            <div class="receipt-header-right">
+                                <div class="receipt-total">₹${this.formatCurrency(receipt.grandTotal || 0)}</div>
+                                <button class="delete-receipt-btn" onclick="event.stopPropagation(); customersManager.deleteReceipt('${escapedCustomerName}', ${originalIndex}, ${index})" title="Delete receipt">
+                                    ×
+                                </button>
+                            </div>
                         </div>
                         <div class="receipt-payment-status payment-status-${paymentStatus}">
                             ${this.getPaymentStatusText(paymentStatus)}
                         </div>
                         ${remainingBalance > 0 ? `<div class="remaining-balance">Remaining: ₹${this.formatCurrency(remainingBalance)}</div>` : ''}
                     </div>
-                    <button class="delete-receipt-btn" onclick="event.stopPropagation(); customersManager.deleteReceipt('${escapedCustomerName}', ${originalIndex}, ${index})" title="Delete receipt">
-                        ×
+                    <button class="view-receipt-btn" onclick="event.stopPropagation(); customersManager.viewReceipt(${index})" title="View receipt">
+                        View Receipt
                     </button>
                 </div>
             `;
@@ -1047,6 +1085,296 @@ class CustomersManager {
         this.currentReceipt = null;
         this.currentReceiptIndex = null;
         this.receipts = [];
+    }
+    
+    viewReceipt(index) {
+        // Get the receipt from the sorted display array (same sorting as displayReceipts)
+        const sortedReceipts = [...this.receipts].sort((a, b) => {
+            const dateA = this.parseDate(a.date);
+            const dateB = this.parseDate(b.date);
+            if (dateA !== dateB) {
+                return dateB - dateA;
+            }
+            const timeA = this.parseTime(a.time || '');
+            const timeB = this.parseTime(b.time || '');
+            if (timeA !== timeB) {
+                return timeB - timeA;
+            }
+            const indexA = a._originalIndex !== undefined ? a._originalIndex : 999;
+            const indexB = b._originalIndex !== undefined ? b._originalIndex : 999;
+            return indexA - indexB;
+        });
+        
+        const receipt = sortedReceipts[index];
+        if (!receipt) {
+            console.error('Receipt not found at index:', index);
+            return;
+        }
+        
+        const receiptContent = document.getElementById('receiptViewContent');
+        const modal = document.getElementById('receiptViewModal');
+        
+        if (!receiptContent || !modal) {
+            console.error('Receipt modal elements not found');
+            return;
+        }
+        
+        // Format receipt similar to script.js
+        const storeName = "SHREEJI'S STORE";
+        const customerName = this.currentCustomer ? this.currentCustomer.toUpperCase() : '';
+        const dateStr = receipt.date || 'N/A';
+        const timeStr = receipt.time || 'N/A';
+        
+        // Detect mobile screen
+        const isMobile = window.innerWidth <= 768;
+        
+        // Adjust column widths based on screen size
+        const nameWidth = isMobile ? 15 : 22;
+        const rateWidth = isMobile ? 7 : 8;
+        const totalWidth = isMobile ? 8 : 10;
+        const separatorWidth = isMobile ? 35 : 50;
+        
+        // Format items for receipt
+        const items = receipt.items || [];
+        const itemsText = items.map((item) => {
+            if (!item || !item.name || item.rate === undefined || item.quantity === undefined) {
+                return null;
+            }
+            
+            // Trim and normalize the item name
+            const cleanName = item.name.trim().replace(/\s+/g, ' ');
+            const name = cleanName.length > nameWidth ? cleanName.substring(0, nameWidth - 3) + '...' : cleanName;
+            const qty = item.quantity.toString();
+            const rate = item.rate.toFixed(2);
+            const total = (item.rate * item.quantity).toFixed(2);
+            
+            // Format: Name (left), then Qty x Rate = Total (right aligned)
+            const namePart = name.padEnd(nameWidth);
+            const qtyPart = qty.padStart(2);
+            const ratePart = rate.padStart(rateWidth);
+            const totalPart = total.padStart(totalWidth);
+            
+            return `${namePart} ${qtyPart} x ${ratePart} = ${totalPart}`;
+        }).filter(line => line !== null).join('\n');
+        
+        // Format total with proper alignment
+        const totalLabel = "Total".padEnd(nameWidth);
+        const grandTotal = receipt.grandTotal || 0;
+        const totalValueStr = `₹${grandTotal.toFixed(2)}`;
+        const totalLineWidth = nameWidth + 1 + 2 + 1 + 1 + 1 + rateWidth + 1 + 1 + 1 + totalWidth;
+        const totalValue = totalValueStr.padStart(totalLineWidth - nameWidth);
+        
+        // Build receipt content
+        const receiptLines = [
+            storeName,
+            customerName ? `Customer: ${customerName}` : '',
+            '',
+            `Date: ${dateStr}`,
+            `Time: ${timeStr}`,
+            '',
+            '·'.repeat(separatorWidth),
+            isMobile ? 'Item           Qty  Rate    Total' : 'Item                  Qty    Rate      Total',
+            '·'.repeat(separatorWidth),
+            itemsText,
+            '·'.repeat(separatorWidth),
+            `${totalLabel}${totalValue}`,
+            '·'.repeat(separatorWidth),
+            '',
+            'Thank you for your purchase!'
+        ];
+        
+        receiptContent.textContent = receiptLines.join('\n');
+        modal.style.display = 'flex';
+    }
+    
+    closeReceiptView() {
+        const modal = document.getElementById('receiptViewModal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+    
+    async shareReceiptView() {
+        const receiptContent = document.getElementById('receiptViewContent');
+        const modal = document.getElementById('receiptViewModal');
+        
+        if (!receiptContent || !modal) {
+            alert('Receipt not found');
+            return;
+        }
+        
+        // Ensure modal is visible for capture
+        if (modal.style.display === 'none') {
+            modal.style.display = 'flex';
+        }
+        
+        try {
+            // Show loading
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            if (loadingOverlay) {
+                loadingOverlay.classList.add('active');
+                const loadingText = loadingOverlay.querySelector('p');
+                if (loadingText) {
+                    loadingText.textContent = 'Generating receipt image...';
+                }
+            }
+            
+            // Wait a bit for any rendering to complete
+            await new Promise(resolve => setTimeout(resolve, 200));
+            
+            // Temporarily ensure receipt content is fully visible and not clipped
+            const originalOverflow = receiptContent.style.overflow;
+            const originalOverflowX = receiptContent.style.overflowX;
+            const originalOverflowY = receiptContent.style.overflowY;
+            const originalWidth = receiptContent.style.width;
+            const originalMaxWidth = receiptContent.style.maxWidth;
+            const originalBoxSizing = receiptContent.style.boxSizing;
+            
+            // Make receipt content fully visible for capture
+            receiptContent.style.overflow = 'visible';
+            receiptContent.style.overflowX = 'visible';
+            receiptContent.style.overflowY = 'visible';
+            receiptContent.style.width = 'auto';
+            receiptContent.style.maxWidth = 'none';
+            receiptContent.style.boxSizing = 'content-box';
+            
+            // Also ensure modal content doesn't clip
+            const modalContent = modal.querySelector('.receipt-modal-content');
+            let canvas;
+            
+            if (modalContent) {
+                const originalModalOverflow = modalContent.style.overflow;
+                const originalModalOverflowX = modalContent.style.overflowX;
+                const originalModalWidth = modalContent.style.width;
+                const originalModalMaxWidth = modalContent.style.maxWidth;
+                
+                modalContent.style.overflow = 'visible';
+                modalContent.style.overflowX = 'visible';
+                modalContent.style.width = 'auto';
+                modalContent.style.maxWidth = 'none';
+                
+                // Wait for layout to update
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                // Get the actual dimensions after making it visible
+                const receiptWidth = Math.max(
+                    receiptContent.scrollWidth,
+                    receiptContent.offsetWidth,
+                    receiptContent.getBoundingClientRect().width
+                );
+                const receiptHeight = Math.max(
+                    receiptContent.scrollHeight,
+                    receiptContent.offsetHeight,
+                    receiptContent.getBoundingClientRect().height
+                );
+                
+                // Capture the receipt content as canvas
+                canvas = await html2canvas(receiptContent, {
+                    backgroundColor: '#ffffff',
+                    scale: 2, // Higher quality
+                    logging: false,
+                    useCORS: true,
+                    allowTaint: false,
+                    width: receiptWidth,
+                    height: receiptHeight,
+                    x: 0,
+                    y: 0,
+                    scrollX: 0,
+                    scrollY: 0
+                });
+                
+                // Restore modal content styles
+                modalContent.style.overflow = originalModalOverflow;
+                modalContent.style.overflowX = originalModalOverflowX;
+                modalContent.style.width = originalModalWidth;
+                modalContent.style.maxWidth = originalModalMaxWidth;
+            } else {
+                // Fallback if modal-content not found
+                const receiptWidth = Math.max(
+                    receiptContent.scrollWidth,
+                    receiptContent.offsetWidth,
+                    receiptContent.getBoundingClientRect().width
+                );
+                const receiptHeight = Math.max(
+                    receiptContent.scrollHeight,
+                    receiptContent.offsetHeight,
+                    receiptContent.getBoundingClientRect().height
+                );
+                
+                canvas = await html2canvas(receiptContent, {
+                    backgroundColor: '#ffffff',
+                    scale: 2,
+                    logging: false,
+                    useCORS: true,
+                    allowTaint: false,
+                    width: receiptWidth,
+                    height: receiptHeight,
+                    x: 0,
+                    y: 0,
+                    scrollX: 0,
+                    scrollY: 0
+                });
+            }
+            
+            // Restore receipt content styles
+            receiptContent.style.overflow = originalOverflow;
+            receiptContent.style.overflowX = originalOverflowX;
+            receiptContent.style.overflowY = originalOverflowY;
+            receiptContent.style.width = originalWidth;
+            receiptContent.style.maxWidth = originalMaxWidth;
+            receiptContent.style.boxSizing = originalBoxSizing;
+            
+            // Convert canvas to blob
+            canvas.toBlob(async (blob) => {
+                if (!blob) {
+                    throw new Error('Failed to create image blob');
+                }
+                
+                const file = new File([blob], 'receipt.jpg', { type: 'image/jpeg' });
+                
+                // Use Web Share API if available
+                if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                    try {
+                        await navigator.share({
+                            title: 'Receipt',
+                            text: 'Receipt from Shreeji\'s Store',
+                            files: [file]
+                        });
+                    } catch (shareError) {
+                        if (shareError.name !== 'AbortError') {
+                            console.error('Error sharing:', shareError);
+                            // Fallback to download
+                            this.downloadReceiptImage(canvas);
+                        }
+                    }
+                } else {
+                    // Fallback to download
+                    this.downloadReceiptImage(canvas);
+                }
+                
+                // Hide loading
+                if (loadingOverlay) {
+                    loadingOverlay.classList.remove('active');
+                }
+            }, 'image/jpeg', 0.95);
+            
+        } catch (error) {
+            console.error('Error sharing receipt:', error);
+            alert('Failed to share receipt. Please try again.');
+            
+            // Hide loading
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            if (loadingOverlay) {
+                loadingOverlay.classList.remove('active');
+            }
+        }
+    }
+    
+    downloadReceiptImage(canvas) {
+        const link = document.createElement('a');
+        link.download = 'receipt.jpg';
+        link.href = canvas.toDataURL('image/jpeg', 0.95);
+        link.click();
     }
 
     showReceiptsView() {
