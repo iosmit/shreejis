@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="icon" type="image/x-icon" href="/favicon/favicon.ico">
+    <link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg">
+    <link rel="icon" type="image/png" sizes="96x96" href="/favicon/favicon-96x96.png">
+    <link rel="apple-touch-icon" href="/favicon/apple-touch-icon.png">
+    <link rel="manifest" href="/favicon/site.webmanifest">
+    <title>Reports - Shreeji's Store</title>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #ffffff;
+            color: #000000;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            margin: 0;
+            padding: 0;
+        }
+        
+        /* Header */
+        .header {
+            background-color: #000000;
+            color: #ffffff;
+            padding: 24px 48px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            min-height: 80px;
+            margin: 24px;
+        }
+        
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            text-decoration: none;
+            color: #ffffff;
+            line-height: 1.2;
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        
+        .back-link {
+            color: #ffffff;
+            text-decoration: none;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: opacity 0.2s;
+            padding: 10px 20px;
+            border: 2px solid #ffffff;
+            border-radius: 12px;
+            font-weight: 500;
+        }
+        
+        .back-link:hover {
+            opacity: 0.7;
+        }
+        
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            padding: 20px 32px 48px 32px;
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        
+        .page-title-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 24px;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        
+        .page-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: #000000;
+            margin: 0;
+            white-space: nowrap;
+        }
+        
+        /* Filter Container */
+        .filter-container {
+            background-color: #ffffff;
+            border: 2px solid #000000;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 32px;
+        }
+        
+        .filter-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #000000;
+            margin-bottom: 16px;
+        }
+        
+        .filter-row {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+        
+        .filter-group {
+            flex: 1;
+            min-width: 150px;
+        }
+        
+        .filter-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #000000;
+            font-size: 14px;
+        }
+        
+        .filter-group select,
+        .filter-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #000000;
+            border-radius: 8px;
+            font-size: 16px;
+            font-family: inherit;
+            background-color: #ffffff;
+            color: #000000;
+            box-sizing: border-box;
+        }
+        
+        .filter-group select:focus,
+        .filter-group input:focus {
+            outline: none;
+            border-color: #000000;
+        }
+        
+        .filter-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 16px;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        
+        .btn-primary {
+            background-color: #000000;
+            color: #ffffff;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            opacity: 0.8;
+        }
+        
+        .btn-secondary {
+            background-color: #ffffff;
+            color: #000000;
+            border: 2px solid #000000;
+        }
+        
+        .btn-secondary:hover {
+            background-color: #000000;
+            color: #ffffff;
+        }
+        
+        /* Stats Container */
+        .stats-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+        
+        .stat-card {
+            background-color: #ffffff;
+            border: 2px solid #000000;
+            border-radius: 12px;
+            padding: 24px;
+            transition: all 0.2s;
+        }
+        
+        .stat-card:hover {
+            background-color: #f5f5f5;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            color: #666666;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #000000;
+        }
+        
+        .stat-value.positive {
+            color: #28a745;
+        }
+        
+        .stat-value.negative {
+            color: #dc3545;
+        }
+        
+        /* Loading Overlay */
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255,255,255,0.9);
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .loading-overlay.active {
+            display: flex;
+        }
+        
+        .spinner {
+            border: 4px solid rgba(0,0,0,0.1);
+            border-top: 4px solid #000000;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .error-message {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 48px 20px;
+            color: #666666;
+        }
+        
+        .empty-state h3 {
+            font-size: 20px;
+            margin-bottom: 8px;
+            color: #000000;
+        }
+        
+        @media (max-width: 768px) {
+            .header {
+                padding: 16px 20px;
+                margin: 16px;
+            }
+            
+            .main-content {
+                padding: 16px 20px 32px 20px;
+            }
+            
+            .back-link {
+                font-size: 14px;
+                padding: 8px 16px;
+            }
+            
+            .page-title-container {
+                margin-bottom: 20px;
+                gap: 12px;
+            }
+            
+            .page-title {
+                font-size: 24px;
+            }
+            
+            .filter-container {
+                padding: 16px;
+            }
+            
+            .filter-row {
+                flex-direction: column;
+            }
+            
+            .filter-group {
+                width: 100%;
+            }
+            
+            .stats-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .stat-card {
+                padding: 20px;
+            }
+            
+            .stat-value {
+                font-size: 28px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <a href="index.html" class="logo">STORE</a>
+        <div class="header-actions">
+            <a href="index.html" class="back-link">← Back to Store</a>
+        </div>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="page-title-container">
+            <h1 class="page-title">Sales Reports</h1>
+        </div>
+        
+        <!-- Filter Container -->
+        <div class="filter-container">
+            <div class="filter-title">Filter by Date</div>
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label for="filterType">Filter Type</label>
+                    <select id="filterType">
+                        <option value="all">All Time</option>
+                        <option value="day">Day</option>
+                        <option value="month">Month</option>
+                        <option value="year">Year</option>
+                    </select>
+                </div>
+                <div class="filter-group" id="dayFilter" style="display: none;">
+                    <label for="filterDay">Select Day</label>
+                    <input type="date" id="filterDay">
+                </div>
+                <div class="filter-group" id="monthFilter" style="display: none;">
+                    <label for="filterMonth">Select Month</label>
+                    <input type="month" id="filterMonth">
+                </div>
+                <div class="filter-group" id="yearFilter" style="display: none;">
+                    <label for="filterYear">Select Year</label>
+                    <input type="number" id="filterYear" min="2000" max="2100" placeholder="YYYY">
+                </div>
+            </div>
+            <div class="filter-actions">
+                <button class="btn btn-primary" id="applyFilterBtn">Apply Filter</button>
+                <button class="btn btn-secondary" id="clearFilterBtn">Clear Filter</button>
+            </div>
+        </div>
+        
+        <!-- Stats Container -->
+        <div class="stats-container">
+            <div class="stat-card">
+                <div class="stat-label">Total Sales</div>
+                <div class="stat-value" id="totalSales">₹0.00</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Total Outstanding Balance</div>
+                <div class="stat-value negative" id="totalOutstanding">₹0.00</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Total Paid</div>
+                <div class="stat-value positive" id="totalPaid">₹0.00</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="spinner"></div>
+        <p>Loading...</p>
+    </div>
+    
+    <script src="report.js"></script>
+</body>
+</html>
+
