@@ -28,12 +28,18 @@ class POSSystem {
         const hasProductsCache = this.loadProductsFromCache();
         const hasCustomersCache = this.loadCustomersFromCache();
         
-        if (hasProductsCache && this.products.length > 0) {
-            // Cache exists and has products - use it immediately
+        // Check if products cache is stale
+        const isProductsStale = hasProductsCache ? this.isCacheStale() : true;
+        
+        if (hasProductsCache && this.products.length > 0 && !isProductsStale) {
+            // Cache exists, has products, and is fresh (less than 5 minutes old) - use it immediately
             this.handleSearch('');
             this.updateLastViewTime();
         } else {
-            // No cache exists or cache is empty - fetch data first, then save to cache
+            // No cache exists, cache is empty, or cache is stale - fetch data
+            if (isProductsStale && hasProductsCache) {
+                console.log('Products cache is stale, fetching fresh data...');
+            }
             await this.loadProductsWithRetry(false); // silent = false (show loading overlay)
             
             // Ensure cache was populated after initial load
@@ -54,10 +60,19 @@ class POSSystem {
             }
         }
         
-        // Load customers only if cache is not available
-        // If cache exists, customers are already loaded in loadCustomersFromCache()
+        // Load customers - will check cache staleness internally
+        // Only fetch if cache is missing or stale (older than 5 minutes)
         if (!hasCustomersCache) {
-            await this.loadCustomers(true); // Load and cache customers
+            // No cache at all - fetch and cache
+            await this.loadCustomers(true); // Load and cache customers (silent mode)
+        } else {
+            // Cache exists - check if it's stale
+            const isStale = this.isCustomersCacheStale();
+            if (isStale) {
+                // Cache is stale - fetch fresh data in background
+                await this.loadCustomers(true); // Silent background refresh
+            }
+            // If cache is fresh, customers are already loaded from loadCustomersFromCache() above
         }
         
         // Set up periodic cache refresh (every 5 minutes) - flush and replace
@@ -196,18 +211,54 @@ class POSSystem {
         }
     }
     
+    // Check if customers cache is stale
+    isCustomersCacheStale() {
+        try {
+            const cacheTimestamp = localStorage.getItem(CUSTOMERS_CACHE_TIMESTAMP_KEY);
+            
+            // If no cache timestamp, it's stale
+            if (!cacheTimestamp) {
+                return true;
+            }
+            
+            const cacheTime = parseInt(cacheTimestamp, 10);
+            const now = Date.now();
+            const timeSinceCache = now - cacheTime;
+            
+            // Cache is stale if older than 5 minutes
+            return timeSinceCache >= CACHE_DURATION_MS;
+        } catch (error) {
+            console.error('Error checking customers cache staleness:', error);
+            return true; // On error, consider it stale
+        }
+    }
+    
     // Load customers from CSV for autocomplete
     async loadCustomers(silent = false) {
         try {
-            // Try to load from cache first if not silent
-            if (!silent) {
-                const cached = this.loadCustomersFromCache();
-                if (cached && this.customers.length > 0) {
+            // Always try to load from cache first
+            const cached = this.loadCustomersFromCache();
+            if (cached && this.customers.length > 0) {
+                // Cache exists and has data
+                // Only fetch if cache is stale (older than 5 minutes) or if explicitly requested (silent=false on first load)
+                const isStale = this.isCustomersCacheStale();
+                
+                if (!isStale) {
+                    // Cache is fresh (less than 5 minutes old) - use it, don't fetch
+                    if (!silent) {
+                        console.log(`Using fresh customers cache (${Math.round((Date.now() - parseInt(localStorage.getItem(CUSTOMERS_CACHE_TIMESTAMP_KEY), 10)) / 1000)}s old)`);
+                    }
                     return; // Use cached data, don't fetch
+                } else {
+                    // Cache is stale - will fetch below, but use cache for now
+                    if (!silent) {
+                        console.log('Customers cache is stale, fetching fresh data...');
+                    }
                 }
             }
             
-            // Only fetch if cache is not available or silent mode (background refresh)
+            // Only fetch if cache is missing, stale, or this is a background refresh (silent=true)
+            // Don't fetch if we have fresh cache (already returned above)
             const response = await fetch('/api/customers?t=' + Date.now());
             if (!response.ok) {
                 console.warn('Failed to load customers for autocomplete');
@@ -662,6 +713,28 @@ class POSSystem {
     }
 
     async loadProducts(silent = false) {
+        // Check cache staleness first - only fetch if cache is missing or stale
+        const isStale = this.isCacheStale();
+        const hasCache = this.cacheExists();
+        
+        // If cache exists and is fresh (less than 5 minutes old), use it
+        if (hasCache && !isStale) {
+            const loaded = this.loadProductsFromCache();
+            if (loaded && this.products.length > 0) {
+                if (!silent) {
+                    const cacheAge = Math.round((Date.now() - parseInt(localStorage.getItem(PRODUCTS_CACHE_TIMESTAMP_KEY), 10)) / 1000);
+                    console.log(`Using fresh products cache (${cacheAge}s old)`);
+                    this.handleSearch('');
+                }
+                return Promise.resolve(); // Use cached data, don't fetch
+            }
+        }
+        
+        // Cache is missing or stale - fetch fresh data
+        if (hasCache && isStale && !silent) {
+            console.log('Products cache is stale, fetching fresh data...');
+        }
+        
         const loadingOverlay = document.getElementById('loadingOverlay');
         
         // Only show loading overlay if not silent (first load or user-triggered)

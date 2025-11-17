@@ -28,11 +28,20 @@ class CustomersManager {
         
         if (!hasCache) {
             // No cache available - fetch and cache
-            await this.loadCustomers(true); // Load and cache customers
+            await this.loadCustomers(true); // Load and cache customers (silent mode)
         } else {
             // Cache exists - refresh customer list from cache to ensure it's up to date
             // This ensures new customers added on index page are visible
             this.refreshCustomerListFromCache();
+            
+            // Check if cache is stale - only fetch if older than 5 minutes
+            const isStale = this.isCustomersCacheStale();
+            if (isStale) {
+                // Cache is stale - fetch fresh data in background (silent)
+                this.loadCustomers(true).catch(err => {
+                    console.error('Error refreshing stale customers cache:', err);
+                });
+            }
         }
         
         // Set up periodic cache refresh (every 5 minutes) - flush and replace
@@ -388,7 +397,54 @@ class CustomersManager {
         loadingOverlay.classList.remove('active');
     }
 
+    // Check if customers cache is stale
+    isCustomersCacheStale() {
+        try {
+            const cacheTimestamp = localStorage.getItem(CUSTOMERS_CACHE_TIMESTAMP_KEY);
+            
+            // If no cache timestamp, it's stale
+            if (!cacheTimestamp) {
+                return true;
+            }
+            
+            const cacheTime = parseInt(cacheTimestamp, 10);
+            const now = Date.now();
+            const timeSinceCache = now - cacheTime;
+            
+            // Cache is stale if older than 5 minutes
+            return timeSinceCache >= CACHE_DURATION_MS;
+        } catch (error) {
+            console.error('Error checking customers cache staleness:', error);
+            return true; // On error, consider it stale
+        }
+    }
+    
     async loadCustomers(silent = false) {
+        // Always try to load from cache first
+        const hasCache = this.loadCustomersFromCache();
+        
+        if (hasCache && this.customers.length > 0) {
+            // Cache exists and has data
+            // Only fetch if cache is stale (older than 5 minutes)
+            const isStale = this.isCustomersCacheStale();
+            
+            if (!isStale) {
+                // Cache is fresh (less than 5 minutes old) - use it, don't fetch
+                if (!silent) {
+                    const cacheAge = Math.round((Date.now() - parseInt(localStorage.getItem(CUSTOMERS_CACHE_TIMESTAMP_KEY), 10)) / 1000);
+                    console.log(`Using fresh customers cache (${cacheAge}s old)`);
+                    this.displayCustomers();
+                }
+                return; // Use cached data, don't fetch
+            } else {
+                // Cache is stale - will fetch below
+                if (!silent) {
+                    console.log('Customers cache is stale, fetching fresh data...');
+                }
+            }
+        }
+        
+        // Only fetch if cache is missing or stale
         if (!silent) {
             this.showLoading();
         }
@@ -480,10 +536,13 @@ class CustomersManager {
         this.showLoading();
         try {
             // Always try to load from cache first to get latest receipts (including those created on index page)
+            // Receipts are always loaded from cache - they're updated via cache updates, not network fetches
             let csvText = localStorage.getItem(CUSTOMERS_CACHE_KEY);
             
             if (!csvText) {
-                // No cache available, fetch from server
+                // No cache available - only fetch if cache is completely missing
+                // This should rarely happen as cache is created on page load
+                console.warn('No customers cache found, fetching from server...');
                 const response = await fetch(`${CUSTOMERS_URL}?t=${Date.now()}`);
                 if (!response.ok) {
                     throw new Error(`Failed to fetch receipts: ${response.status}`);
@@ -495,6 +554,7 @@ class CustomersManager {
                     localStorage.setItem(CUSTOMERS_CACHE_TIMESTAMP_KEY, Date.now().toString());
                 }
             } else {
+                // Cache exists - use it (receipts are updated via cache updates, not network fetches)
                 console.log('Loading receipts from cache (includes latest updates from index page)');
             }
             
@@ -770,10 +830,9 @@ class CustomersManager {
                     this.showCustomersView();
                 }
                 
-                // Optionally refresh from server in the background (silent)
-                this.loadCustomers(true).catch(err => {
-                    console.error('Error refreshing customers after delete:', err);
-                });
+                // Don't fetch from server - cache is already updated
+                // The cache update happens asynchronously, but we've already updated local arrays
+                // Fresh data will be fetched on next 5-minute interval if needed
             } else {
                 throw new Error(result.error || 'Failed to delete customer');
             }
