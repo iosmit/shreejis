@@ -26,6 +26,8 @@ function doPost(e) {
       return handleUpdatePayment(data);
     } else if (action === 'deleteReceipt') {
       return handleDeleteReceipt(data);
+    } else if (action === 'deleteCustomer') {
+      return handleDeleteCustomer(data);
     } else {
       // Default action: save receipt
       return handleSaveReceipt(data);
@@ -337,6 +339,41 @@ function handleDeleteReceipt(data) {
       receiptCol = col; // Update receiptCol for next iteration
     }
   }
+  
+  return ContentService.createTextOutput(JSON.stringify({success: true}))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function handleDeleteCustomer(data) {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = spreadsheet.getSheetByName('Customer Receipts');
+  
+  if (!sheet) {
+    return ContentService.createTextOutput(JSON.stringify({success: false, error: 'Sheet not found'}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  const customerName = data.customerName;
+  
+  // Find the customer row
+  const lastRow = sheet.getLastRow();
+  let customerRow = null;
+  
+  for (let i = 2; i <= lastRow; i++) {
+    const rowCustomerName = sheet.getRange(i, 1).getValue();
+    if (rowCustomerName === customerName) {
+      customerRow = i;
+      break;
+    }
+  }
+  
+  if (!customerRow) {
+    return ContentService.createTextOutput(JSON.stringify({success: false, error: 'Customer not found'}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  // Delete the entire row
+  sheet.deleteRow(customerRow);
   
   return ContentService.createTextOutput(JSON.stringify({success: true}))
     .setMimeType(ContentService.MimeType.JSON);

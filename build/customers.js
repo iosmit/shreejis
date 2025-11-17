@@ -634,10 +634,16 @@ class CustomersManager {
             .map(customer => {
                 const customerName = String(customer.name || '').trim();
                 if (!customerName) return '';
+                const escapedCustomerName = this.escapeHtml(customerName).replace(/'/g, "\\'");
                 return `
-                    <div class="customer-card" onclick="customersManager.selectCustomer('${customerName.replace(/'/g, "\\'")}')">
-                        <div class="customer-name">${this.escapeHtml(customerName)}</div>
-                        <div class="customer-receipt-count">Click to view receipts</div>
+                    <div class="customer-card">
+                        <div class="customer-card-content" onclick="customersManager.selectCustomer('${escapedCustomerName}')">
+                            <div class="customer-name">${this.escapeHtml(customerName)}</div>
+                            <div class="customer-receipt-count">Click to view receipts</div>
+                        </div>
+                        <button class="delete-customer-btn" onclick="event.stopPropagation(); customersManager.deleteCustomer('${escapedCustomerName}')" title="Delete customer">
+                            ×
+                        </button>
                     </div>
                 `;
             })
@@ -650,10 +656,23 @@ class CustomersManager {
         this.showReceiptsView();
     }
     
+    // Delete a customer - show confirmation modal
+    deleteCustomer(customerName) {
+        // Store deletion info for confirmation
+        this.pendingDelete = {
+            type: 'customer',
+            customerName: customerName
+        };
+        
+        // Show confirmation modal
+        this.showDeleteConfirmModal();
+    }
+    
     // Delete a receipt - show confirmation modal
     deleteReceipt(customerName, receiptIndex, displayIndex) {
         // Store deletion info for confirmation
         this.pendingDelete = {
+            type: 'receipt',
             customerName: customerName,
             receiptIndex: receiptIndex,
             displayIndex: displayIndex
@@ -666,7 +685,17 @@ class CustomersManager {
     // Show delete confirmation modal
     showDeleteConfirmModal() {
         const modal = document.getElementById('deleteConfirmModal');
-        if (modal) {
+        const modalTitle = modal.querySelector('h2');
+        const modalBody = modal.querySelector('.modal-body p');
+        
+        if (modal && this.pendingDelete) {
+            if (this.pendingDelete.type === 'customer') {
+                modalTitle.textContent = 'Delete Customer';
+                modalBody.textContent = `Are you sure you want to delete customer "${this.pendingDelete.customerName}"? This will delete all their receipts. This action cannot be undone.`;
+            } else {
+                modalTitle.textContent = 'Delete Receipt';
+                modalBody.textContent = 'Are you sure you want to delete this receipt? This action cannot be undone.';
+            }
             modal.classList.add('active');
         }
     }
@@ -680,17 +709,137 @@ class CustomersManager {
         this.pendingDelete = null;
     }
     
-    // Confirm and execute receipt deletion
+    // Confirm and execute deletion (customer or receipt)
     async confirmDeleteReceipt() {
         if (!this.pendingDelete) {
             return;
         }
         
-        const { customerName, receiptIndex } = this.pendingDelete;
+        if (this.pendingDelete.type === 'customer') {
+            await this.confirmDeleteCustomer();
+        } else {
+            await this.confirmDeleteReceiptAction();
+        }
+    }
+    
+    // Confirm and execute customer deletion
+    async confirmDeleteCustomer() {
+        if (!this.pendingDelete || this.pendingDelete.type !== 'customer') {
+            return;
+        }
+        
+        const { customerName } = this.pendingDelete;
         this.closeDeleteConfirmModal();
         
         this.showLoading();
         try {
+            const response = await fetch('/api/delete-customer', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    customerName: customerName
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Failed to delete customer: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            if (result.success) {
+                // Immediately remove customer from local arrays
+                this.customers = this.customers.filter(customer => {
+                    const name = customer.name || (typeof customer === 'string' ? customer : '');
+                    return name && name.trim().toUpperCase() !== customerName.toUpperCase();
+                });
+                this.filteredCustomers = this.filteredCustomers.filter(customer => {
+                    const name = customer.name || (typeof customer === 'string' ? customer : '');
+                    return name && name.trim().toUpperCase() !== customerName.toUpperCase();
+                });
+                
+                // Update local cache by removing the customer
+                this.updateCustomersCacheAfterDeleteCustomer(customerName);
+                
+                // Refresh the display immediately
+                this.displayCustomers();
+                
+                // If we're viewing this customer's receipts, go back to customers view
+                if (this.currentCustomer === customerName) {
+                    this.showCustomersView();
+                }
+                
+                // Optionally refresh from server in the background (silent)
+                this.loadCustomers(true).catch(err => {
+                    console.error('Error refreshing customers after delete:', err);
+                });
+            } else {
+                throw new Error(result.error || 'Failed to delete customer');
+            }
+        } catch (error) {
+            console.error('Error deleting customer:', error);
+            alert('Failed to delete customer. Please try again.');
+        } finally {
+            this.hideLoading();
+            this.pendingDelete = null;
+        }
+    }
+    
+    // Confirm and execute receipt deletion
+    async confirmDeleteReceiptAction() {
+        if (!this.pendingDelete || this.pendingDelete.type !== 'receipt') {
+            return;
+        }
+        
+        const { customerName, receiptIndex, displayIndex } = this.pendingDelete;
+        this.closeDeleteConfirmModal();
+        
+        this.showLoading();
+        try {
+            // First, get the sorted receipts to find the correct receipt by display index
+            const sortedReceipts = [...this.receipts].sort((a, b) => {
+                const dateA = this.parseDate(a.date);
+                const dateB = this.parseDate(b.date);
+                if (dateA !== dateB) {
+                    return dateB - dateA;
+                }
+                const timeA = this.parseTime(a.time || '');
+                const timeB = this.parseTime(b.time || '');
+                if (timeA !== timeB) {
+                    return timeB - timeA;
+                }
+                const indexA = a._originalIndex !== undefined ? a._originalIndex : 999;
+                const indexB = b._originalIndex !== undefined ? b._originalIndex : 999;
+                return indexA - indexB;
+            });
+            
+            // Log all receipts in sorted order for debugging
+            console.log('Sorted receipts before deletion:', sortedReceipts.map((r, idx) => ({
+                displayIndex: idx,
+                date: r.date,
+                time: r.time,
+                originalIndex: r._originalIndex
+            })));
+            
+            // Get the receipt at the display index (the one the user clicked)
+            const receiptToDelete = sortedReceipts[displayIndex];
+            if (!receiptToDelete) {
+                throw new Error('Receipt not found at display index');
+            }
+            
+            // Get the actual originalIndex from the receipt (for Google Sheets)
+            const actualReceiptIndex = receiptToDelete._originalIndex !== undefined 
+                ? receiptToDelete._originalIndex 
+                : receiptIndex;
+            
+            console.log('Receipt to delete:', {
+                displayIndex,
+                date: receiptToDelete.date,
+                time: receiptToDelete.time,
+                originalIndex: actualReceiptIndex
+            });
+            
             const response = await fetch('/api/delete-receipt', {
                 method: 'POST',
                 headers: {
@@ -698,7 +847,7 @@ class CustomersManager {
                 },
                 body: JSON.stringify({
                     customerName: customerName,
-                    receiptIndex: receiptIndex
+                    receiptIndex: actualReceiptIndex
                 })
             });
             
@@ -708,12 +857,53 @@ class CustomersManager {
             
             const result = await response.json();
             if (result.success) {
-                // Update local cache by removing the receipt
-                this.updateCustomersCacheAfterDelete(customerName, receiptIndex);
+                // Update local cache FIRST before modifying arrays
+                // This ensures cache is updated before any reload happens
+                this.updateCustomersCacheAfterDelete(customerName, actualReceiptIndex);
                 
-                // Reload receipts to reflect the deletion
-                await this.loadReceipts(customerName);
+                // Immediately remove the receipt from local arrays
+                // receiptToDelete is from sortedReceipts which is a spread of this.receipts
+                // So it should be the same object reference - use direct object comparison
+                console.log('Deleting receipt:', {
+                    displayIndex,
+                    actualReceiptIndex,
+                    receiptDate: receiptToDelete.date,
+                    receiptTime: receiptToDelete.time,
+                    receiptOriginalIndex: receiptToDelete._originalIndex
+                });
+                
+                // Remove the exact receipt object we found
+                const beforeCount = this.receipts.length;
+                this.receipts = this.receipts.filter(r => r !== receiptToDelete);
+                let afterCount = this.receipts.length;
+                
+                console.log(`Removed receipt: ${beforeCount} -> ${afterCount} receipts`);
+                
+                // If object reference didn't work, try by _originalIndex as fallback
+                if (beforeCount === afterCount) {
+                    console.warn('Object reference match failed, using _originalIndex fallback');
+                    this.receipts = this.receipts.filter(r => {
+                        const rIndex = r._originalIndex !== undefined ? r._originalIndex : -1;
+                        return rIndex !== actualReceiptIndex;
+                    });
+                    afterCount = this.receipts.length;
+                    console.log(`After fallback: ${afterCount} receipts`);
+                }
+                
+                // Log remaining receipts after deletion
+                console.log('Remaining receipts after deletion:', this.receipts.map((r, idx) => ({
+                    index: idx,
+                    date: r.date,
+                    time: r.time,
+                    originalIndex: r._originalIndex
+                })));
+                
+                // Refresh the display immediately with updated receipts array
                 this.displayReceipts();
+                
+                // Don't reload from cache immediately - we've already updated the local array
+                // The cache update happens asynchronously, so reloading would cause a race condition
+                // The cache will be updated in the background, and will be used on next page load
             } else {
                 throw new Error(result.error || 'Failed to delete receipt');
             }
@@ -723,6 +913,57 @@ class CustomersManager {
         } finally {
             this.hideLoading();
             this.pendingDelete = null;
+        }
+    }
+    
+    // Update customers cache after deleting a customer
+    updateCustomersCacheAfterDeleteCustomer(customerName) {
+        try {
+            // Get cached CSV data
+            const cachedCsv = localStorage.getItem(CUSTOMERS_CACHE_KEY);
+            if (!cachedCsv) {
+                console.warn('No customers cache found to update');
+                return;
+            }
+            
+            // Parse the CSV
+            Papa.parse(cachedCsv, {
+                header: true,
+                skipEmptyLines: true,
+                complete: (results) => {
+                    // Filter out the deleted customer
+                    const filteredData = results.data.filter(row => {
+                        const rowCustomerName = row.CUSTOMER || row.customer || row.Customer || '';
+                        return rowCustomerName && rowCustomerName.trim().toUpperCase() !== customerName.toUpperCase();
+                    });
+                    
+                    // Convert back to CSV
+                    const newCsv = Papa.unparse(filteredData, {
+                        header: true
+                    });
+                    
+                    // Update cache
+                    localStorage.setItem(CUSTOMERS_CACHE_KEY, newCsv);
+                    
+                    // Update parsed cache
+                    const updatedCustomers = filteredData
+                        .map(row => {
+                            const name = row.CUSTOMER || row.customer || row.Customer || '';
+                            return name ? { name: name.trim() } : null;
+                        })
+                        .filter(c => c && c.name);
+                    
+                    localStorage.setItem(CUSTOMERS_CACHE_KEY_PARSED, JSON.stringify(updatedCustomers));
+                    localStorage.setItem(CUSTOMERS_CACHE_TIMESTAMP_KEY, Date.now().toString());
+                    
+                    console.log('Updated customers cache after deleting customer');
+                },
+                error: (error) => {
+                    console.error('Error updating customers cache:', error);
+                }
+            });
+        } catch (error) {
+            console.error('Error updating customers cache after delete:', error);
         }
     }
     

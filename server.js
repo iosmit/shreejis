@@ -273,6 +273,44 @@ app.post('/api/delete-receipt', async (req, res) => {
     }
 });
 
+app.post('/api/delete-customer', async (req, res) => {
+    try {
+        const { customerName } = req.body;
+        
+        if (!customerName) {
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+
+        const sheetsWebhookUrl = process.env.SHEETS_WEBHOOK_URL;
+        
+        if (!sheetsWebhookUrl) {
+            return res.status(500).json({ error: 'SHEETS_WEBHOOK_URL not configured' });
+        }
+
+        // Send delete request to Google Apps Script
+        const response = await fetch(sheetsWebhookUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                action: 'deleteCustomer',
+                customerName: customerName
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Failed to delete customer: ${response.status} ${response.statusText}`);
+        }
+
+        const result = await response.json();
+        res.json(result);
+    } catch (error) {
+        console.error('Error deleting customer:', error);
+        res.status(500).json({ error: error.message || 'Failed to delete customer' });
+    }
+});
+
 // Serve static files
 app.use(express.static(path.join(__dirname, 'build')));
 
