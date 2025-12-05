@@ -643,9 +643,13 @@ class POSSystem {
             searchInput.addEventListener('input', (e) => this.handleSearch(e.target.value));
             searchInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' && this.searchResults.length > 0) {
-                    this.addToCart(this.searchResults[0]);
-                    searchInput.value = '';
-                    this.clearSearchResults();
+                    e.preventDefault();
+                    const searchResultsDiv = document.getElementById('searchResults');
+                    const firstItem = searchResultsDiv.querySelector('.search-result-item');
+                    if (firstItem) {
+                        const index = parseInt(firstItem.dataset.index);
+                        this.showQuantityInput(firstItem, this.searchResults[index]);
+                    }
                 }
             });
 
@@ -916,13 +920,121 @@ class POSSystem {
 
         // Add click handlers
         searchResultsDiv.querySelectorAll('.search-result-item').forEach(item => {
-            item.addEventListener('click', () => {
+            item.addEventListener('click', (e) => {
+                // Don't trigger if clicking on quantity input or add button
+                if (e.target.closest('.search-qty-controls')) {
+                    return;
+                }
                 const index = parseInt(item.dataset.index);
-                this.addToCart(this.searchResults[index]);
-                document.getElementById('productSearch').value = '';
-                this.clearSearchResults();
+                this.showQuantityInput(item, this.searchResults[index]);
             });
         });
+    }
+    
+    showQuantityInput(itemElement, product) {
+        // Remove any existing quantity controls from all search results
+        const searchResultsDiv = document.getElementById('searchResults');
+        if (searchResultsDiv) {
+            searchResultsDiv.querySelectorAll('.search-qty-controls').forEach(controls => {
+                controls.remove();
+            });
+        }
+        
+        // Check if quantity input already exists on this item
+        if (itemElement.querySelector('.search-qty-controls')) {
+            return;
+        }
+        
+        // Create quantity controls
+        const qtyControls = document.createElement('div');
+        qtyControls.className = 'search-qty-controls';
+        qtyControls.innerHTML = `
+            <div class="search-qty-input-group">
+                <button class="search-qty-btn" data-action="decrease">−</button>
+                <input type="number" class="search-qty-input" value="1" min="1" step="1">
+                <button class="search-qty-btn" data-action="increase">+</button>
+            </div>
+            <button class="search-add-btn">Add</button>
+        `;
+        
+        // Insert after product rate
+        const productRate = itemElement.querySelector('.product-rate');
+        productRate.insertAdjacentElement('afterend', qtyControls);
+        
+        const qtyInput = qtyControls.querySelector('.search-qty-input');
+        const decreaseBtn = qtyControls.querySelector('[data-action="decrease"]');
+        const increaseBtn = qtyControls.querySelector('[data-action="increase"]');
+        const addBtn = qtyControls.querySelector('.search-add-btn');
+        
+        // Focus on quantity input
+        setTimeout(() => qtyInput.focus(), 50);
+        qtyInput.select();
+        
+        // Decrease button
+        decreaseBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const currentValue = parseInt(qtyInput.value) || 1;
+            if (currentValue > 1) {
+                qtyInput.value = currentValue - 1;
+            }
+        });
+        
+        // Increase button
+        increaseBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const currentValue = parseInt(qtyInput.value) || 1;
+            qtyInput.value = currentValue + 1;
+        });
+        
+        // Add button
+        addBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const quantity = parseInt(qtyInput.value) || 1;
+            if (quantity > 0) {
+                this.addToCartWithQuantity(product, quantity);
+                document.getElementById('productSearch').value = '';
+                this.clearSearchResults();
+            }
+        });
+        
+        // Enter key on quantity input
+        qtyInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+                const quantity = parseInt(qtyInput.value) || 1;
+                if (quantity > 0) {
+                    this.addToCartWithQuantity(product, quantity);
+                    document.getElementById('productSearch').value = '';
+                    this.clearSearchResults();
+                }
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                qtyControls.remove();
+            }
+        });
+        
+        // Prevent clicks on quantity controls from triggering item click
+        qtyControls.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+    }
+    
+    addToCartWithQuantity(product, quantity) {
+        const existingItem = this.cart.find(item => item.name === product.name);
+        
+        if (existingItem) {
+            existingItem.quantity += quantity;
+        } else {
+            this.cart.push({
+                name: product.name,
+                rate: product.rate,
+                quantity: quantity
+            });
+        }
+
+        this.updateCartDisplay();
     }
 
     highlightMatch(text, query) {
@@ -940,19 +1052,8 @@ class POSSystem {
     }
 
     addToCart(product) {
-        const existingItem = this.cart.find(item => item.name === product.name);
-        
-        if (existingItem) {
-            existingItem.quantity += 1;
-        } else {
-            this.cart.push({
-                name: product.name,
-                rate: product.rate,
-                quantity: 1
-            });
-        }
-
-        this.updateCartDisplay();
+        // Use addToCartWithQuantity with default quantity of 1
+        this.addToCartWithQuantity(product, 1);
     }
 
     removeFromCart(index) {

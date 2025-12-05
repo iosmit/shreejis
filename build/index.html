@@ -260,6 +260,106 @@
             border-top: 1px solid #e0e0e0;
         }
         
+        .search-qty-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-left: 12px;
+        }
+        
+        .search-qty-input-group {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .search-qty-input {
+            width: 60px;
+            padding: 6px 8px;
+            border: 2px solid #000000;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+            text-align: center;
+            background-color: #ffffff;
+            color: #000000;
+            font-weight: 600;
+        }
+        
+        .search-qty-input:focus {
+            outline: none;
+            border-color: #000000;
+        }
+        
+        .search-qty-btn {
+            width: 32px;
+            height: 32px;
+            border: 2px solid #000000;
+            background: #ffffff;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            color: #000000;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        
+        .search-qty-btn:hover {
+            background: #000000;
+            color: #ffffff;
+        }
+        
+        .search-add-btn {
+            padding: 8px 16px;
+            border: 2px solid #000000;
+            background: #000000;
+            color: #ffffff;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+        
+        .search-add-btn:hover {
+            background: #ffffff;
+            color: #000000;
+        }
+        
+        @media (max-width: 768px) {
+            .search-result-item {
+                flex-wrap: wrap;
+                gap: 12px;
+            }
+            
+            .search-qty-controls {
+                width: 100%;
+                margin-left: 0;
+                justify-content: flex-end;
+            }
+            
+            .search-qty-input {
+                width: 50px;
+                font-size: 16px;
+            }
+            
+            .search-qty-btn {
+                width: 36px;
+                height: 36px;
+                font-size: 20px;
+            }
+            
+            .search-add-btn {
+                padding: 10px 20px;
+                font-size: 16px;
+            }
+        }
+        
         /* Cart Section */
         .cart-section {
             background-color: #ffffff;
