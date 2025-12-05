@@ -1578,6 +1578,11 @@ class CustomersManager {
     showCustomersView() {
         document.getElementById('customersView').style.display = 'block';
         document.getElementById('receiptsView').classList.remove('active');
+        // Show search bar on customers view
+        const searchContainer = document.querySelector('.search-container');
+        if (searchContainer) {
+            searchContainer.style.display = 'block';
+        }
         this.currentCustomer = null;
         this.currentReceipt = null;
         this.currentReceiptIndex = null;
@@ -1877,6 +1882,11 @@ class CustomersManager {
     showReceiptsView() {
         document.getElementById('customersView').style.display = 'none';
         document.getElementById('receiptsView').classList.add('active');
+        // Hide search bar on receipts view
+        const searchContainer = document.querySelector('.search-container');
+        if (searchContainer) {
+            searchContainer.style.display = 'none';
+        }
     }
 
     getPaymentStatus(grandTotal, totalPaid) {
