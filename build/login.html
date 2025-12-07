@@ -251,8 +251,9 @@
     <script>
         // Check if already authenticated
         if (authManager.isAuthenticated()) {
-            // Redirect to the page they were trying to access, or index
-            const redirectTo = sessionStorage.getItem('redirectAfterLogin') || 'index.html';
+            // Redirect based on auth type
+            const redirectTo = sessionStorage.getItem('redirectAfterLogin') || 
+                (authManager.authType === 'customer' ? 'order.html' : 'index.html');
             sessionStorage.removeItem('redirectAfterLogin');
             window.location.href = redirectTo;
         }
@@ -275,15 +276,21 @@
             const password = passwordInput.value.trim();
             
             try {
-                const success = await authManager.verifyPassword(password);
+                const result = await authManager.verifyPassword(password);
                 
-                if (success) {
-                    // Save authentication
-                    authManager.setAuthenticated();
+                if (result.success) {
+                    // Save authentication with type and customer name
+                    authManager.setAuthenticated(result.type, result.customerName || null);
                     
-                    // Redirect to the page they were trying to access, or index
-                    const redirectTo = sessionStorage.getItem('redirectAfterLogin') || 'index.html';
-                    sessionStorage.removeItem('redirectAfterLogin');
+                    // Redirect based on auth type
+                    let redirectTo;
+                    if (result.type === 'customer') {
+                        redirectTo = 'order.html';
+                    } else {
+                        // Store password - redirect to index
+                        redirectTo = sessionStorage.getItem('redirectAfterLogin') || 'index.html';
+                        sessionStorage.removeItem('redirectAfterLogin');
+                    }
                     window.location.href = redirectTo;
                 } else {
                     // Password incorrect

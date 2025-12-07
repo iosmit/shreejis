@@ -7,9 +7,12 @@ This guide will help you set up automatic saving of receipts to Google Sheets.
 1. Open your Google Sheet (or create a new one)
 2. Make sure you have a sheet named **"Customer Receipts"** (case-sensitive)
    - If it doesn't exist, the script will create it automatically with headers
-3. The script will automatically add headers if the sheet is new:
-   - **CUSTOMER** (column 1)
-   - **RECEIPT** (column 2, and additional RECEIPT columns as needed)
+3. Create a sheet named **"Customer Orders"** (case-sensitive)
+   - This sheet stores pending customer orders before approval
+   - The script will create it automatically if it doesn't exist
+4. The script will automatically add headers if the sheets are new:
+   - **Customer Receipts**: **CUSTOMER** (column 1) | **RECEIPT** (column 2, and additional RECEIPT columns as needed)
+   - **Customer Orders**: **CUSTOMER** (column 1) | **PASSWORD** (column 2) | **ORDER** (column 3)
 
 ## Step 2: Create Google Apps Script
 
@@ -28,6 +31,10 @@ function doPost(e) {
       return handleDeleteReceipt(data);
     } else if (action === 'deleteCustomer') {
       return handleDeleteCustomer(data);
+    } else if (action === 'saveOrder') {
+      return handleSaveOrder(data);
+    } else if (action === 'approveOrder') {
+      return handleApproveOrder(data);
     } else {
       // Default action: save receipt
       return handleSaveReceipt(data);
@@ -79,6 +86,7 @@ function handleSaveReceipt(data) {
   const time = data.time || '';
   const grandTotal = data.grandTotal || 0;
   const items = data.items || [];
+  const profitMargin = data.profitMargin || 0;
   
   // Create receipt JSON object
   const receiptJson = JSON.stringify({
@@ -87,7 +95,13 @@ function handleSaveReceipt(data) {
     customerName: customerName || 'Walk-in',
     items: items,
     grandTotal: grandTotal,
-    storeName: storeName
+    profitMargin: profitMargin,
+    storeName: storeName,
+    payments: {
+      cash: 0,
+      online: 0
+    },
+    remainingBalance: grandTotal
   });
   
   const displayCustomerName = customerName || 'Walk-in';
@@ -418,6 +432,216 @@ function handleGetAllCustomers() {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+function handleSaveOrder(data) {
+  // Get the specific sheet named "Customer Orders"
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = spreadsheet.getSheetByName('Customer Orders');
+  
+  // Create the sheet if it doesn't exist
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet('Customer Orders');
+    // Add headers: CUSTOMER | PASSWORD | ORDER
+    sheet.getRange(1, 1).setValue('CUSTOMER');
+    sheet.getRange(1, 2).setValue('PASSWORD');
+    sheet.getRange(1, 3).setValue('ORDER');
+    // Make header row bold
+    const headerRange = sheet.getRange(1, 1, 1, 3);
+    headerRange.setFontWeight('bold');
+  }
+  
+  // Get order data
+  const customerName = data.customerName || '';
+  const storeName = data.storeName || '';
+  const date = data.date || '';
+  const time = data.time || '';
+  const grandTotal = data.grandTotal || 0;
+  const items = data.items || [];
+  const profitMargin = data.profitMargin || 0;
+  
+  // Create order JSON object (same format as receipt)
+  const orderJson = JSON.stringify({
+    date: date,
+    time: time,
+    customerName: customerName,
+    items: items,
+    grandTotal: grandTotal,
+    profitMargin: profitMargin,
+    storeName: storeName,
+    payments: {
+      cash: 0,
+      online: 0
+    },
+    remainingBalance: grandTotal
+  });
+  
+  // Find the customer row (row with customer name in column 1)
+  let customerRow = null;
+  const lastRow = sheet.getLastRow();
+  
+  if (lastRow >= 1) {
+    // Check all rows (starting from row 2, since row 1 is header)
+    for (let i = 2; i <= lastRow; i++) {
+      const rowCustomerName = sheet.getRange(i, 1).getValue();
+      if (rowCustomerName === customerName) {
+        customerRow = i;
+        break;
+      }
+    }
+  }
+  
+  if (customerRow) {
+    // Customer exists - update the order in column 3
+    sheet.getRange(customerRow, 3).setValue(orderJson);
+  } else {
+    // New customer - add new row
+    const newCustomerRow = lastRow + 1;
+    
+    // Add customer name in column 1
+    sheet.getRange(newCustomerRow, 1).setValue(customerName);
+    
+    // Password column (column 2) should already be set in the Customer Orders sheet
+    // We don't set it here - it's managed separately
+    
+    // Add order in column 3
+    sheet.getRange(newCustomerRow, 3).setValue(orderJson);
+  }
+  
+  return ContentService.createTextOutput(JSON.stringify({success: true}))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function handleApproveOrder(data) {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const ordersSheet = spreadsheet.getSheetByName('Customer Orders');
+  const receiptsSheet = spreadsheet.getSheetByName('Customer Receipts');
+  
+  if (!ordersSheet) {
+    return ContentService.createTextOutput(JSON.stringify({success: false, error: 'Customer Orders sheet not found'}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  const customerName = data.customerName;
+  const approved = data.approved;
+  
+  // Find the customer row in Customer Orders sheet
+  const lastRow = ordersSheet.getLastRow();
+  let customerRow = null;
+  
+  for (let i = 2; i <= lastRow; i++) {
+    const rowCustomerName = ordersSheet.getRange(i, 1).getValue();
+    if (rowCustomerName === customerName) {
+      customerRow = i;
+      break;
+    }
+  }
+  
+  if (!customerRow) {
+    return ContentService.createTextOutput(JSON.stringify({success: false, error: 'Customer order not found'}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  // Get the order JSON from column 3
+  const orderJson = ordersSheet.getRange(customerRow, 3).getValue();
+  
+  if (!orderJson || orderJson === '') {
+    return ContentService.createTextOutput(JSON.stringify({success: false, error: 'No order found for customer'}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  if (approved) {
+    // Approved: Move order to Customer Receipts sheet
+    // Create Customer Receipts sheet if it doesn't exist
+    let receiptsSheet = spreadsheet.getSheetByName('Customer Receipts');
+    if (!receiptsSheet) {
+      receiptsSheet = spreadsheet.insertSheet('Customer Receipts');
+      receiptsSheet.getRange(1, 1).setValue('CUSTOMER');
+      receiptsSheet.getRange(1, 2).setValue('RECEIPT');
+      const headerRange = receiptsSheet.getRange(1, 1, 1, 2);
+      headerRange.setFontWeight('bold');
+    }
+    
+    // Parse order JSON
+    let orderData;
+    try {
+      orderData = typeof orderJson === 'string' ? JSON.parse(orderJson) : orderJson;
+    } catch (e) {
+      return ContentService.createTextOutput(JSON.stringify({success: false, error: 'Invalid order JSON'}))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // Find the customer row in Customer Receipts sheet
+    const receiptsLastRow = receiptsSheet.getLastRow();
+    let receiptsCustomerRow = null;
+    
+    if (receiptsLastRow >= 1) {
+      for (let i = 2; i <= receiptsLastRow; i++) {
+        const rowCustomerName = receiptsSheet.getRange(i, 1).getValue();
+        if (rowCustomerName === customerName) {
+          receiptsCustomerRow = i;
+          break;
+        }
+      }
+    }
+    
+    if (receiptsCustomerRow) {
+      // Customer exists - shift all existing receipts to the right
+      const lastCol = receiptsSheet.getLastColumn();
+      
+      // Shift all existing receipts one column to the right (from right to left)
+      for (let col = lastCol; col >= 2; col--) {
+        const sourceValue = receiptsSheet.getRange(receiptsCustomerRow, col).getValue();
+        if (sourceValue !== '' && sourceValue !== null) {
+          receiptsSheet.getRange(receiptsCustomerRow, col + 1).setValue(sourceValue);
+        }
+      }
+      
+      // If we need a new receipt column, add header
+      const newLastCol = Math.max(lastCol + 1, 3);
+      if (newLastCol > lastCol) {
+        receiptsSheet.getRange(1, newLastCol).setValue('RECEIPT');
+        receiptsSheet.getRange(1, newLastCol).setFontWeight('bold');
+      }
+      
+      // Add new receipt in column 2 (latest receipt)
+      receiptsSheet.getRange(receiptsCustomerRow, 2).setValue(orderJson);
+    } else {
+      // New customer in receipts - add new row
+      const newReceiptsCustomerRow = receiptsLastRow + 1;
+      
+      // Add customer name in column 1
+      receiptsSheet.getRange(newReceiptsCustomerRow, 1).setValue(customerName);
+      
+      // Ensure we have at least 2 columns
+      const lastCol = receiptsSheet.getLastColumn();
+      if (lastCol < 2) {
+        receiptsSheet.getRange(1, 2).setValue('RECEIPT');
+        receiptsSheet.getRange(1, 2).setFontWeight('bold');
+      }
+      
+      // Add receipt in column 2
+      receiptsSheet.getRange(newReceiptsCustomerRow, 2).setValue(orderJson);
+    }
+    
+    // Update stock quantities after approving order
+    try {
+      updateStockQuantities(spreadsheet, orderData.items || []);
+    } catch (stockError) {
+      console.error('Error updating stock:', stockError);
+    }
+  }
+  
+  // Remove order from Customer Orders sheet (whether approved or disapproved)
+  // Clear the order column (column 3)
+  ordersSheet.getRange(customerRow, 3).clearContent();
+  
+  // Optionally, you can also remove the entire row if you want to clean up
+  // Uncomment the next line if you want to delete the row entirely:
+  // ordersSheet.deleteRow(customerRow);
+  
+  return ContentService.createTextOutput(JSON.stringify({success: true}))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
 function updateStockQuantities(spreadsheet, items) {
   // Find the products sheet - try common names first, then first sheet
   let productsSheet = null;
@@ -550,20 +774,42 @@ function updateStockQuantities(spreadsheet, items) {
 7. Click **Deploy**
 8. Copy the **Web app URL** (it will look like: `https://script.google.com/macros/s/.../exec`)
 
-## Step 3: Configure Environment Variable
+## Step 3: Publish Customer Orders Sheet as CSV
+
+1. In your Google Sheet, go to the **Customer Orders** sheet
+2. Click **File** → **Share** → **Publish to web**
+3. Select:
+   - **Link**: Entire document
+   - **Sheet**: Customer Orders
+   - **Format**: CSV
+4. Click **Publish**
+5. Copy the published CSV URL (it will look like: `https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/gviz/tq?tqx=out:csv&gid=...`)
+6. Alternatively, you can use this format: `https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/gviz/tq?tqx=out:csv&sheet=Customer%20Orders`
+   - Replace `YOUR_SHEET_ID` with your Google Sheet ID (found in the sheet URL)
+
+## Step 4: Configure Environment Variables
 
 1. Create or edit `.env` file in the `build` directory
-2. Add the following line:
+2. Add the following lines:
    ```
    SHEETS_WEBHOOK_URL=https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec
+   CUSTOMERS_ORDERS=https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/gviz/tq?tqx=out:csv&sheet=Customer%20Orders
    ```
-   Replace `YOUR_SCRIPT_ID` with the actual web app URL you copied
+   - Replace `YOUR_SCRIPT_ID` with the actual web app URL you copied from Step 2
+   - Replace `YOUR_SHEET_ID` with your Google Sheet ID (found in the sheet URL)
+   - Use the CSV URL you copied from Step 3 for `CUSTOMERS_ORDERS`
 
-## Step 4: Test
+## Step 5: Test
 
 1. Start your server: `npm start`
-2. Add items to cart and click "Checkout"
-3. Check your Google Sheet - the receipt data should appear automatically
+2. **Test Receipt Saving**: Add items to cart and click "Checkout"
+3. **Test Order System**: 
+   - Login with a customer password (from Customer Orders sheet)
+   - Add items to cart and click "Place Order"
+   - Check Customer Orders sheet - the order should appear
+   - Go to Customers page - you should see a badge on the customer
+   - Click the badge to approve/disapprove the order
+4. Check your Google Sheets - the data should appear automatically
 
 ## Data Format
 
@@ -591,11 +837,67 @@ Jane Smith| {"date":"15/11/2025","time":"11:00...     | ...                     
     {"name": "Item2", "quantity": 1, "rate": 50.00, "total": 50.00}
   ],
   "grandTotal": 250.00,
-  "storeName": "SHREEJI'S STORE"
+  "profitMargin": 150.00,
+  "storeName": "SHREEJI'S STORE",
+  "payments": {
+    "cash": 0,
+    "online": 0
+  },
+  "remainingBalance": 250.00
 }
 ```
 
 **Important**: When a new receipt is added for an existing customer, all existing receipts are shifted one column to the right, and the new (latest) receipt is always placed in column 2.
+
+## Customer Orders Sheet
+
+The **Customer Orders** sheet stores pending orders from customers before they are approved:
+
+### Structure:
+```
+CUSTOMER  | PASSWORD | ORDER
+John Doe  | pass123  | {"date":"15/11/2025","time":"10:30...}
+Jane Smith| pass456  | {"date":"15/11/2025","time":"11:00...}
+```
+
+### Columns:
+- **CUSTOMER** (column 1): Customer name
+- **PASSWORD** (column 2): Customer order password (used for customer login)
+  - **Important**: You must manually add customer names and passwords to this sheet
+  - Each customer should have a unique password
+  - Customers use this password to log in to the order page
+- **ORDER** (column 3): Order JSON (same format as receipt JSON)
+  - This column is automatically populated when a customer places an order
+  - It's cleared when the order is approved or disapproved
+
+### How It Works:
+1. **Customer Places Order**: When a customer places an order through the order page, it's saved to the Customer Orders sheet
+2. **Store Views Orders**: The store can see pending orders as badges on the customers page
+3. **Approve/Disapprove**: 
+   - **Approve**: Order is moved from Customer Orders to Customer Receipts (as newest receipt) and stock is updated
+   - **Disapprove**: Order is removed from Customer Orders sheet only
+
+### Order JSON Format:
+Same as receipt JSON format, but stored in Customer Orders sheet:
+```json
+{
+  "date": "15/11/2025",
+  "time": "10:30 pm",
+  "customerName": "JOHN DOE",
+  "items": [
+    {"name": "Item1", "quantity": 2, "rate": 100.00, "total": 200.00},
+    {"name": "Item2", "quantity": 1, "rate": 50.00, "total": 50.00}
+  ],
+  "grandTotal": 250.00,
+  "profitMargin": 150.00,
+  "storeName": "SHREEJI'S STORE",
+  "payments": {
+    "cash": 0,
+    "online": 0
+  },
+  "remainingBalance": 250.00
+}
+```
 
 ## Stock Management
 
@@ -614,10 +916,24 @@ The script automatically updates stock quantities when receipts are generated:
 
 **Note**: Stock updates happen automatically after each receipt is saved. If stock update fails, the receipt is still saved successfully (errors are logged but don't block receipt saving).
 
+## Customer Order Workflow
+
+1. **Customer Login**: Customer enters their password (from Customer Orders sheet, column 2)
+2. **Place Order**: Customer adds items to cart and clicks "Place Order"
+3. **Order Saved**: Order is saved to Customer Orders sheet (column 3)
+4. **Store Notification**: Badge appears on customer card in customers page
+5. **Review Order**: Store clicks badge to view order details
+6. **Approve/Disapprove**:
+   - **Approve**: Order moves to Customer Receipts sheet, stock is updated
+   - **Disapprove**: Order is removed from Customer Orders sheet
+
 ## Notes
 
 - The webhook runs silently in the background - errors won't interrupt the receipt display
 - If saving fails, check the browser console for error messages
 - Make sure your Google Apps Script has permission to edit the sheet
 - Stock updates require the products sheet to have PRODUCT and STOCK INFO columns
+- Stock is only updated when an order is **approved**, not when it's placed
+- Customer Orders sheet should be published as CSV for the `CUSTOMERS_ORDERS` environment variable
+- Each customer should have a unique password in the Customer Orders sheet
 

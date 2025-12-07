@@ -8,7 +8,7 @@
     <link rel="icon" type="image/png" sizes="96x96" href="/favicon/favicon-96x96.png">
     <link rel="apple-touch-icon" href="/favicon/apple-touch-icon.png">
     <link rel="manifest" href="/favicon/site.webmanifest">
-    <title>Shreeji's Store</title>
+    <title>Order - Shreeji's Store</title>
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <style>
@@ -56,8 +56,7 @@
             align-items: center;
         }
         
-        .customers-link,
-        .report-link {
+        .customer-name-btn {
             color: #ffffff;
             text-decoration: none;
             font-size: 16px;
@@ -69,10 +68,12 @@
             border: 2px solid #ffffff;
             border-radius: 12px;
             font-weight: 500;
+            cursor: pointer;
+            background: transparent;
+            font-family: inherit;
         }
         
-        .customers-link:hover,
-        .report-link:hover {
+        .customer-name-btn:hover {
             opacity: 0.7;
         }
         
@@ -91,81 +92,157 @@
                 margin: 16px;
             }
             
-            .header-actions {
-                flex-wrap: wrap;
-                gap: 12px;
-            }
-            
-            .customers-link,
-            .report-link {
-                font-size: 14px;
-                padding: 8px 16px;
-            }
-            
-            .input-fields-container {
-                flex-direction: column;
-                gap: 12px;
-            }
-            
-            /* On mobile, use HTML order (customer name first, then search) */
-            /* Lower order value = appears first in flexbox */
-            .customer-name-container {
-                order: -1 !important;
-            }
-            
-            .search-container {
-                order: 0 !important;
-            }
-            
-            #productSearch {
-                padding: 8px 14px;
-                font-size: 16px;
-            }
-            
             .main-content {
                 padding: 6px 16px;
             }
-            
-            .customer-name-input {
-                font-size: 16px;
-            }
-            
-            .cart-item-rate-input {
-                font-size: 16px;
-            }
-            
-            .modal-content {
-                width: 95%;
-                margin: 2% auto;
-                max-height: 95vh;
-                overflow-y: auto;
-                overflow-x: hidden;
-                -webkit-overflow-scrolling: touch;
-            }
-            
-            .receipt-content {
-                padding: 20px 16px 40px 16px;
-                font-size: 11px;
-                line-height: 1.6;
-                overflow-x: hidden;
-                word-wrap: break-word;
-                overflow-wrap: break-word;
-                min-height: auto;
-            }
-            
-            .modal-actions {
-                padding: 16px;
-            }
-            
-            .modal-content {
-                padding-bottom: 20px;
-            }
+        }
+        
+        /* Customer Info View (compact) */
+        .customer-info-view {
+            display: none;
+        }
+        
+        .customer-info-view.active {
+            display: block;
+        }
+        
+        .cart-view {
+            display: block;
+        }
+        
+        .cart-view.hidden {
+            display: none;
+        }
+        
+        /* Customer Info Section (compact) */
+        .customer-info-section {
+            background-color: #ffffff;
+            border: 2px solid #000000;
+            border-radius: 24px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+        
+        .customer-info-section h3 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #000000;
+        }
+        
+        .customer-info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        
+        .customer-name-display {
+            font-size: 16px;
+            font-weight: 600;
+            color: #000000;
+        }
+        
+        .total-unpaid {
+            font-size: 16px;
+            font-weight: 700;
+            color: #dc3545;
+        }
+        
+        .total-unpaid.zero {
+            color: #28a745;
+        }
+        
+        /* Receipts Section (compact) */
+        .receipts-section {
+            background-color: #ffffff;
+            border: 2px solid #000000;
+            border-radius: 24px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+        
+        .receipts-section h3 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #000000;
+        }
+        
+        .receipts-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .receipt-item {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        
+        .receipt-item-info {
+            flex: 1;
+            min-width: 150px;
+        }
+        
+        .receipt-item-date {
+            font-weight: 600;
+            color: #000000;
+            font-size: 14px;
+            margin-bottom: 2px;
+        }
+        
+        .receipt-item-amount {
+            font-size: 14px;
+            font-weight: 600;
+            color: #000000;
+        }
+        
+        .receipt-item-amount .unpaid-part {
+            color: #dc3545;
+            font-weight: 500;
+            font-size: 13px;
+        }
+        
+        .empty-receipts {
+            text-align: center;
+            color: #666666;
+            padding: 20px;
+            font-style: italic;
+            font-size: 14px;
+        }
+        
+        .view-receipt-btn-compact {
+            padding: 8px 16px;
+            border: 2px solid #000000;
+            background: #000000;
+            color: #ffffff;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            font-family: inherit;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        
+        .view-receipt-btn-compact:hover {
+            background: #ffffff;
+            color: #000000;
         }
         
         /* Search Container */
         .search-container {
             position: relative;
             width: 100%;
+            margin-bottom: 24px;
         }
         
         #productSearch {
@@ -381,7 +458,6 @@
             flex-direction: column;
         }
         
-        
         .cart-section h2 {
             margin-bottom: 24px;
             color: #000000;
@@ -403,158 +479,6 @@
             gap: 12px;
             margin-bottom: 24px;
             flex-wrap: wrap;
-        }
-        
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #000000;
-            font-size: 14px;
-        }
-        
-        .form-input {
-            width: 100%;
-            padding: 12px 16px;
-            border: 2px solid #000000;
-            border-radius: 8px;
-            font-size: 16px;
-            font-family: inherit;
-            background-color: #ffffff;
-            color: #000000;
-            box-sizing: border-box;
-        }
-        
-        .form-input:focus {
-            outline: none;
-            border-color: #000000;
-        }
-        
-        .form-input::placeholder {
-            color: #666666;
-        }
-        
-        .manual-product-modal-content {
-            padding: 0;
-        }
-        
-        .manual-product-form {
-            padding: 0 24px 24px 24px;
-        }
-        
-        .manual-product-modal-content .modal-header {
-            margin: 0;
-            padding: 24px 24px 16px 24px;
-            border-bottom: none;
-        }
-        
-        .manual-product-modal-content .form-group {
-            margin-bottom: 20px;
-        }
-        
-        .manual-product-modal-content .form-group:last-of-type {
-            margin-bottom: 0;
-        }
-        
-        .manual-product-modal-content .modal-actions {
-            margin-top: 24px;
-            padding: 0;
-            border-top: none;
-            justify-content: flex-end;
-        }
-        
-        .manual-product-modal-content .form-input {
-            border: 1px solid #d0d0d0;
-        }
-        
-        .manual-product-modal-content .form-input:focus {
-            border-color: #000000;
-        }
-        
-        .input-fields-container {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 24px;
-        }
-        
-        .customer-name-container {
-            flex: 1;
-            order: 2; /* Second on desktop */
-            position: relative;
-        }
-        
-        .search-container {
-            flex: 1;
-            order: 1; /* First on desktop */
-        }
-        
-        .customer-name-input {
-            width: 100%;
-            padding: 12px 16px;
-            border: 2px solid #000000;
-            border-radius: 12px;
-            font-size: 16px;
-            font-family: inherit;
-            background-color: #ffffff;
-            color: #000000;
-            box-sizing: border-box;
-        }
-        
-        .customer-name-input:focus {
-            outline: none;
-            border-color: #000000;
-            background-color: #ffffff;
-        }
-        
-        .customer-name-input::placeholder {
-            color: #666666;
-        }
-        
-        .customer-name-results {
-            position: absolute;
-            top: 100%;
-            left: 0;
-            right: 0;
-            background: #ffffff;
-            border: none;
-            border-radius: 0;
-            margin-top: 8px;
-            max-height: 500px;
-            overflow-y: auto;
-            z-index: 1000;
-            display: none;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-        
-        .customer-name-result-item {
-            padding: 16px 20px;
-            cursor: pointer;
-            border-bottom: 1px solid #e0e0e0;
-            transition: background-color 0.2s;
-        }
-        
-        .customer-name-result-item:hover {
-            background-color: #f9f9f9;
-        }
-        
-        .customer-name-result-item:last-child {
-            border-bottom: none;
-        }
-        
-        .customer-name-result-text {
-            font-weight: 500;
-            color: #000000;
-            font-size: 16px;
-        }
-        
-        .customer-name-result-text mark {
-            background-color: #ffeb3b;
-            padding: 2px 4px;
-            border-radius: 3px;
         }
         
         .cart-items {
@@ -608,14 +532,7 @@
         .cart-item-rate {
             font-size: 14px;
             color: #666666;
-            cursor: pointer;
             user-select: none;
-            transition: color 0.2s;
-        }
-        
-        .cart-item-rate:hover {
-            color: #000000;
-            text-decoration: underline;
         }
         
         .cart-item-stock {
@@ -713,19 +630,12 @@
                 flex: 1;
             }
             
-            
             .remove-btn-desktop {
                 display: flex !important;
             }
             
             .remove-btn-mobile {
                 display: none !important;
-            }
-        }
-        
-        @media (min-width: 769px) {
-            .modal-content {
-                max-height: 70vh;
             }
         }
         
@@ -750,7 +660,6 @@
             color: #ffffff;
             border-color: #dc3545;
         }
-        
         
         .btn {
             flex: 1;
@@ -805,7 +714,7 @@
         
         .modal.active,
         .modal[style*="flex"],
-        #receiptModal[style*="flex"] {
+        #orderModal[style*="flex"] {
             display: flex !important;
         }
         
@@ -842,11 +751,6 @@
             flex: 1;
         }
         
-        .modal-header .btn {
-            flex: 0 0 auto;
-            max-width: 200px;
-        }
-        
         .close-btn {
             background: none;
             border: none;
@@ -868,7 +772,7 @@
             color: #000000;
         }
         
-        .receipt-content {
+        .order-content {
             padding: 32px 28px 32px 28px;
             font-family: 'Courier New', Courier, monospace;
             font-size: 13px;
@@ -882,6 +786,18 @@
             overflow-x: visible;
             letter-spacing: 0.1px;
             min-height: auto;
+        }
+        
+        @media (max-width: 768px) {
+            .header-actions {
+                flex-wrap: wrap;
+                gap: 12px;
+            }
+            
+            .customer-name-btn {
+                font-size: 14px;
+                padding: 8px 16px;
+            }
         }
         
         .modal-actions {
@@ -980,12 +896,18 @@
                 display: none !important;
             }
             
-            .receipt-content {
+            .order-content,
+            #receiptViewContent {
                 font-size: 10pt;
                 padding: 0;
                 max-width: 100%;
                 line-height: 1.5;
                 overflow: visible;
+            }
+            
+            #receiptViewModal,
+            #receiptViewModal * {
+                visibility: visible;
             }
             
             /* Hide all other page elements */
@@ -1000,92 +922,94 @@
 <body>
     <!-- Header -->
     <div class="header">
-        <a href="index.html" class="logo">Shreeji's</a>
+        <a href="order.html" class="logo">Shreeji's</a>
         <div class="header-actions">
-            <a href="report.html" class="report-link" id="reportBtn">Report</a>
-            <a href="customers.html" class="customers-link" id="customersBtn">Customers</a>
+            <button class="customer-name-btn" id="customerNameBtn">Customer Name</button>
         </div>
     </div>
     
     <!-- Main Content -->
     <div class="main-content">
-        <!-- Combined Cart Section with Search and Products -->
-        <section class="cart-section">
-            <!-- Cart -->
+        <!-- Customer Info View (shown when name button clicked) -->
+        <div id="customerInfoView" class="customer-info-view">
+            <!-- Customer Info Section -->
+            <section class="customer-info-section">
+                <h3>Customer Information</h3>
+                <div class="customer-info-row">
+                    <div class="customer-name-display" id="customerNameDisplay">Loading...</div>
+                    <div class="total-unpaid" id="totalUnpaid">₹0.00</div>
+                </div>
+            </section>
+            
+            <!-- Receipts Section -->
+            <section class="receipts-section">
+                <h3>Previous Receipts</h3>
+                <div id="receiptsList" class="receipts-list">
+                    <div class="empty-receipts">Loading receipts...</div>
+                </div>
+            </section>
+        </div>
+        
+        <!-- Cart View (default view) -->
+        <div id="cartView" class="cart-view">
+            <!-- Cart Section -->
+            <section class="cart-section">
             <h2>
                 <span>Cart</span>
                 <span id="grandTotal" class="cart-header-total">₹0.00</span>
             </h2>
             <div class="cart-actions">
-                <button id="checkoutBtn" class="btn btn-primary" disabled>Checkout</button>
+                <button id="placeOrderBtn" class="btn btn-primary" disabled>Place Order</button>
                 <button id="clearCartBtn" class="btn btn-secondary" disabled>Clear Cart</button>
-                <button id="addManualProductBtn" class="btn btn-secondary">Add Product Manually</button>
             </div>
-            <div class="input-fields-container">
-                <div class="customer-name-container">
-                    <input 
-                        type="text" 
-                        id="customerName" 
-                        placeholder="Customer Name (required)" 
-                        class="customer-name-input"
-                        required
-                        autocomplete="off"
-                    >
-                    <div id="customerNameResults" class="customer-name-results"></div>
-                </div>
-                <div class="search-container">
-                    <input 
-                        type="text" 
-                        id="productSearch" 
-                        placeholder="Search products..." 
-                        autocomplete="off"
-                        class="search-input"
-                    >
-                    <div id="searchResults" class="search-results"></div>
-                </div>
+            <div class="search-container">
+                <input 
+                    type="text" 
+                    id="productSearch" 
+                    placeholder="Search products..." 
+                    autocomplete="off"
+                    class="search-input"
+                >
+                <div id="searchResults" class="search-results"></div>
             </div>
             <div id="cartItems" class="cart-items">
                 <p class="empty-cart">No items in cart</p>
             </div>
-
         </section>
-    </div>
-
-    <!-- Manual Product Modal -->
-    <div id="manualProductModal" class="modal">
-        <div class="modal-content manual-product-modal-content">
-            <div class="modal-header">
-                <h2>Add Product Manually</h2>
-                <button class="close-btn" id="closeManualProductModal">&times;</button>
-            </div>
-            <form id="manualProductForm" class="manual-product-form">
-                <div class="form-group">
-                    <label for="manualProductName">Product Name</label>
-                    <input type="text" id="manualProductName" class="form-input" required placeholder="Enter product name">
-                </div>
-                <div class="form-group">
-                    <label for="manualProductRate">Rate (₹)</label>
-                    <input type="number" id="manualProductRate" class="form-input" required step="0.01" min="0" placeholder="0.00">
-                </div>
-                <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" id="cancelManualProductBtn">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Add to Cart</button>
-                </div>
-            </form>
         </div>
     </div>
     
-    <!-- Receipt Modal -->
-    <div id="receiptModal" class="modal">
+    <!-- Order Confirmation Modal -->
+    <div id="orderModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
                 <div style="display: flex; gap: 12px;">
-                    <button id="printReceipt" class="btn btn-primary">Print</button>
-                    <button id="shareReceipt" class="btn btn-secondary">Share</button>
+                    <button id="printOrder" class="btn btn-primary">Print</button>
+                    <button id="shareOrder" class="btn btn-secondary">Share</button>
                 </div>
-                <button class="close-btn" id="closeReceipt">&times;</button>
+                <button class="close-btn" id="closeOrderModal">&times;</button>
             </div>
-            <div class="receipt-content" id="receiptContent"></div>
+            <div class="order-content" id="orderContent"></div>
+            <div class="modal-actions" style="padding: 24px;">
+                <button id="closeOrderBtn" class="btn btn-primary">Close</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Receipt View Modal -->
+    <div id="receiptViewModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div style="display: flex; gap: 12px;">
+                    <button id="printReceiptView" class="btn btn-primary">Print</button>
+                    <button id="shareReceiptView" class="btn btn-secondary">Share</button>
+                </div>
+                <button class="close-btn" id="closeReceiptView">&times;</button>
+            </div>
+            <div class="order-content" id="receiptViewContent"></div>
+            <div class="modal-actions" style="padding: 24px;">
+                <button id="closeReceiptViewBtn" class="btn btn-primary">Close</button>
+            </div>
         </div>
     </div>
 
@@ -1098,16 +1022,13 @@
     <script src="auth.js"></script>
     <script>
         // Check authentication before loading the page
-        if (!authManager.requireAuth()) {
-            // Redirect will happen in requireAuth, but stop execution here
-            throw new Error('Authentication required');
-        }
-        
-        // If user is a customer, redirect to order page
-        if (authManager.authType === 'customer') {
-            window.location.href = 'order.html';
+        if (!authManager.requireAuth() || authManager.authType !== 'customer') {
+            // Redirect to login if not authenticated or not a customer
+            window.location.href = 'login.html';
+            throw new Error('Customer authentication required');
         }
     </script>
-    <script src="script.js"></script>
+    <script src="order.js"></script>
 </body>
 </html>
+

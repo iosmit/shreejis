@@ -19,6 +19,8 @@ class CustomersManager {
         this.cacheRefreshInterval = null;
         this.pendingDelete = null; // Store pending deletion info
         this.products = []; // Store products for profit margin calculation
+        this.pendingOrders = {}; // Map of customer name to order data
+        this.pendingOrderCustomer = null; // Customer name for pending order approval
         this.init();
     }
     
@@ -88,6 +90,9 @@ class CustomersManager {
         // Load products from cache for profit margin calculation
         this.loadProductsFromCache();
         
+        // Load pending orders
+        await this.loadPendingOrders();
+        
         // Always load from cache first to show latest data (including receipts created on index page)
         const hasCache = this.loadCustomersFromCache();
         
@@ -115,6 +120,64 @@ class CustomersManager {
         // 2. Fresh data is fetched (when cache is missing or stale)
         // 3. Every 5 minutes (automatic flush and replace)
         this.setupPeriodicRefresh();
+    }
+    
+    // Load pending orders from Customer Orders sheet
+    async loadPendingOrders() {
+        try {
+            const response = await fetch('/api/customer-orders');
+            if (!response.ok) {
+                console.warn('Failed to load customer orders');
+                return;
+            }
+            
+            const csvText = await response.text();
+            this.pendingOrders = {};
+            
+            Papa.parse(csvText, {
+                header: false,
+                skipEmptyLines: true,
+                complete: (results) => {
+                    if (!results.data || results.data.length < 2) {
+                        return;
+                    }
+                    
+                    // First row is headers, skip it
+                    for (let i = 1; i < results.data.length; i++) {
+                        const row = results.data[i];
+                        if (row.length >= 3) {
+                            // First column: customer name
+                            // Second column: password
+                            // Third column: order JSON
+                            const customerName = String(row[0] || '').trim();
+                            const orderJson = String(row[2] || '').trim();
+                            
+                            if (customerName && orderJson) {
+                                try {
+                                    let orderData = orderJson;
+                                    if (orderData.startsWith('"') && orderData.endsWith('"')) {
+                                        orderData = orderData.slice(1, -1);
+                                    }
+                                    orderData = orderData.replace(/""/g, '"');
+                                    const order = JSON.parse(orderData);
+                                    this.pendingOrders[customerName] = order;
+                                } catch (e) {
+                                    console.error('Error parsing order JSON for', customerName, ':', e);
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Refresh display to show badges
+                    this.displayCustomers();
+                },
+                error: (error) => {
+                    console.error('Error parsing customer orders CSV:', error);
+                }
+            });
+        } catch (error) {
+            console.error('Error loading pending orders:', error);
+        }
     }
     
     // Refresh customer list from cache to pick up new customers
@@ -819,11 +882,17 @@ class CustomersManager {
                 const customerName = String(customer.name || '').trim();
                 if (!customerName) return '';
                 const escapedCustomerName = this.escapeHtml(customerName).replace(/'/g, "\\'");
+                const hasPendingOrder = this.pendingOrders[customerName] !== undefined;
                 return `
                     <div class="customer-card">
                         <div class="customer-card-content" onclick="customersManager.selectCustomer('${escapedCustomerName}')">
                             <div class="customer-name">${this.escapeHtml(customerName)}</div>
                             <div class="customer-receipt-count">Click to view receipts</div>
+                            ${hasPendingOrder ? `
+                                <div class="pending-order-badge" onclick="event.stopPropagation(); customersManager.showOrderApproval('${escapedCustomerName}')">
+                                    New Order
+                                </div>
+                            ` : ''}
                         </div>
                         <button class="delete-customer-btn" onclick="event.stopPropagation(); customersManager.deleteCustomer('${escapedCustomerName}')" title="Delete customer">
                             ×
@@ -833,6 +902,186 @@ class CustomersManager {
             })
             .filter(html => html !== '') // Remove empty strings
             .join('');
+    }
+    
+    // Show order approval modal
+    showOrderApproval(customerName) {
+        const order = this.pendingOrders[customerName];
+        if (!order) {
+            return;
+        }
+        
+        this.pendingOrderCustomer = customerName;
+        
+        // Create or show approval modal
+        let modal = document.getElementById('orderApprovalModal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'orderApprovalModal';
+            modal.className = 'modal';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2>Order Approval</h2>
+                        <button class="close-btn" id="closeOrderApprovalModal">&times;</button>
+                    </div>
+                    <div id="orderApprovalContent" style="padding: 0;"></div>
+                    <div class="modal-actions" style="padding: 24px; display: flex; gap: 12px;">
+                        <button id="approveOrderBtn" class="btn btn-primary">Approve</button>
+                        <button id="disapproveOrderBtn" class="btn btn-secondary">Disapprove</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            
+            // Add event listeners
+            document.getElementById('closeOrderApprovalModal').addEventListener('click', () => {
+                this.closeOrderApprovalModal();
+            });
+            document.getElementById('approveOrderBtn').addEventListener('click', () => {
+                this.approveOrder(true);
+            });
+            document.getElementById('disapproveOrderBtn').addEventListener('click', () => {
+                this.approveOrder(false);
+            });
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    this.closeOrderApprovalModal();
+                }
+            });
+        }
+        
+        // Display order as receipt format
+        const content = document.getElementById('orderApprovalContent');
+        if (content) {
+            // Format order as receipt (similar to index page)
+            const isMobile = window.innerWidth <= 768;
+            const nameWidth = isMobile ? 15 : 22;
+            const rateWidth = isMobile ? 7 : 8;
+            const totalWidth = isMobile ? 8 : 10;
+            const separatorWidth = isMobile ? 35 : 50;
+            
+            const items = order.items || [];
+            const validItems = items.filter((item) => {
+                if (!item || !item.name || item.rate === undefined || item.quantity === undefined) {
+                    return false;
+                }
+                return true;
+            });
+            
+            const itemsText = validItems.map((item, index) => {
+                const serialNumber = (index + 1).toString();
+                const cleanName = item.name.trim().replace(/\s+/g, ' ');
+                const serialPrefix = `${serialNumber}. `;
+                const availableNameWidth = nameWidth - serialPrefix.length;
+                const name = cleanName.length > availableNameWidth ? cleanName.substring(0, availableNameWidth - 3) + '...' : cleanName;
+                const qty = item.quantity.toString();
+                const rate = item.rate.toFixed(2);
+                const total = (item.rate * item.quantity).toFixed(2);
+                
+                const namePart = name.padEnd(availableNameWidth);
+                const qtyPart = qty.padStart(2);
+                const ratePart = rate.padStart(rateWidth);
+                const totalPart = total.padStart(totalWidth);
+                
+                return `${serialPrefix}${namePart} ${qtyPart} x ${ratePart} = ${totalPart}`;
+            }).join('\n');
+            
+            const maxSerialNumber = validItems.length;
+            const serialPrefixWidth = maxSerialNumber.toString().length + 2;
+            const totalLabel = "Total".padEnd(nameWidth);
+            const grandTotal = order.grandTotal || 0;
+            const totalValueStr = `₹${grandTotal.toFixed(2)}`;
+            const totalLineWidth = serialPrefixWidth + nameWidth + 1 + 2 + 1 + 1 + 1 + rateWidth + 1 + 1 + 1 + totalWidth;
+            const totalValue = totalValueStr.padStart(totalLineWidth - nameWidth);
+            
+            const receiptLines = [
+                order.storeName || "SHREEJI'S STORE",
+                `Customer: ${customerName.toUpperCase()}`,
+                '',
+                `Date: ${order.date || 'N/A'}`,
+                `Time: ${order.time || 'N/A'}`,
+                '',
+                '·'.repeat(separatorWidth),
+                isMobile ? 'Item           Qty  Rate    Total' : 'Item                  Qty    Rate      Total',
+                '·'.repeat(separatorWidth),
+                itemsText,
+                '·'.repeat(separatorWidth),
+                `${totalLabel}${totalValue}`,
+                '·'.repeat(separatorWidth),
+                '',
+                'Order Pending Approval'
+            ];
+            
+            // Create receipt content element with monospace font (matching index page style)
+            content.innerHTML = '';
+            const receiptContent = document.createElement('div');
+            receiptContent.className = 'receipt-content';
+            receiptContent.style.cssText = 'padding: 32px 28px 32px 28px; font-family: "Courier New", Courier, monospace; font-size: 13px; line-height: 1.9; color: #000000; background: #ffffff; white-space: pre; text-align: left; width: 100%; margin: 0 auto; overflow-x: visible; letter-spacing: 0.1px; min-height: auto;';
+            receiptContent.textContent = receiptLines.join('\n');
+            content.appendChild(receiptContent);
+        }
+        
+        modal.classList.add('active');
+    }
+    
+    closeOrderApprovalModal() {
+        const modal = document.getElementById('orderApprovalModal');
+        if (modal) {
+            modal.classList.remove('active');
+        }
+        this.pendingOrderCustomer = null;
+    }
+    
+    async approveOrder(approved) {
+        if (!this.pendingOrderCustomer) {
+            return;
+        }
+        
+        this.showLoading();
+        try {
+            const response = await fetch('/api/approve-order', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    customerName: this.pendingOrderCustomer,
+                    approved: approved
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Failed to ${approved ? 'approve' : 'disapprove'} order: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            if (result.success) {
+                // Remove from pending orders
+                delete this.pendingOrders[this.pendingOrderCustomer];
+                
+                // Refresh display
+                this.displayCustomers();
+                
+                // Reload customers cache if order was approved
+                if (approved) {
+                    // Clear cache to force refresh
+                    localStorage.removeItem(CUSTOMERS_CACHE_KEY);
+                    localStorage.removeItem(CUSTOMERS_CACHE_KEY_PARSED);
+                    localStorage.removeItem(CUSTOMERS_CACHE_TIMESTAMP_KEY);
+                    await this.loadCustomers(true);
+                }
+                
+                this.closeOrderApprovalModal();
+            } else {
+                throw new Error(result.error || `Failed to ${approved ? 'approve' : 'disapprove'} order`);
+            }
+        } catch (error) {
+            console.error('Error approving/disapproving order:', error);
+            alert(`Failed to ${approved ? 'approve' : 'disapprove'} order. Please try again.`);
+        } finally {
+            this.hideLoading();
+        }
     }
 
     async selectCustomer(customerName) {
