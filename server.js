@@ -109,13 +109,13 @@ app.get('/api/products', async (req, res) => {
 });
 
 // Proxy endpoint to fetch customers CSV from Google Sheets
-app.get('/api/customers', async (req, res) => {
+app.get('/api/customers-receipts', async (req, res) => {
     try {
-        const customersUrl = process.env.CUSTOMERS_URL;
+        const customersUrl = process.env.CUSTOMERS_RECEIPTS;
         
         if (!customersUrl) {
-            console.error('CUSTOMERS_URL not configured in environment');
-            return res.status(500).json({ error: 'CUSTOMERS_URL not configured' });
+            console.error('CUSTOMERS_RECEIPTS not configured in environment');
+            return res.status(500).json({ error: 'CUSTOMERS_RECEIPTS not configured' });
         }
 
         console.log('Fetching customers CSV from:', customersUrl);

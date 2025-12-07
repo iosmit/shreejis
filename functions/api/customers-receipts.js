@@ -3,12 +3,12 @@
 
 export async function onRequestGet(context) {
     try {
-        // Get the CUSTOMERS_URL from environment variables
-        const customersUrl = context.env.CUSTOMERS_URL;
+        // Get the CUSTOMERS_RECEIPTS from environment variables
+        const customersUrl = context.env.CUSTOMERS_RECEIPTS;
         
         if (!customersUrl) {
             return new Response(
-                JSON.stringify({ error: 'CUSTOMERS_URL not configured' }),
+                JSON.stringify({ error: 'CUSTOMERS_RECEIPTS not configured' }),
                 {
                     status: 500,
                     headers: {

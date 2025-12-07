@@ -1,5 +1,5 @@
 // Customers CSV URL - using proxy endpoint to keep URL hidden
-const CUSTOMERS_URL = '/api/customers';
+const CUSTOMERS_RECEIPTS = '/api/customers-receipts';
 
 // Cache keys - must match customers.js
 const CUSTOMERS_CACHE_KEY = 'customersCache';
@@ -240,7 +240,7 @@ class ReportManager {
                 // No cache available - fetch from server
                 console.log('No customers cache found, fetching from server...');
                 try {
-                    const response = await fetch(`${CUSTOMERS_URL}?t=${Date.now()}`);
+                    const response = await fetch(`${CUSTOMERS_RECEIPTS}?t=${Date.now()}`);
                     if (!response.ok) {
                         throw new Error(`Failed to fetch receipts: ${response.status} ${response.statusText}`);
                     }

@@ -1,5 +1,5 @@
 // Customers CSV URL - using proxy endpoint to keep URL hidden
-const CUSTOMERS_URL = '/api/customers';
+const CUSTOMERS_RECEIPTS = '/api/customers-receipts';
 
 // Cache keys - must match script.js
 const CUSTOMERS_CACHE_KEY = 'customersCache';
@@ -519,7 +519,7 @@ class CustomersManager {
             this.showLoading();
         }
         try {
-            const response = await fetch(`${CUSTOMERS_URL}?t=${Date.now()}`);
+            const response = await fetch(`${CUSTOMERS_RECEIPTS}?t=${Date.now()}`);
             if (!response.ok) {
                 throw new Error(`Failed to fetch customers: ${response.status}`);
             }
@@ -621,7 +621,7 @@ class CustomersManager {
                 // No cache available - only fetch if cache is completely missing
                 // This should rarely happen as cache is created on page load
                 console.warn('No customers cache found, fetching from server...');
-                const response = await fetch(`${CUSTOMERS_URL}?t=${Date.now()}`);
+                const response = await fetch(`${CUSTOMERS_RECEIPTS}?t=${Date.now()}`);
                 if (!response.ok) {
                     throw new Error(`Failed to fetch receipts: ${response.status}`);
                 }
@@ -1583,6 +1583,11 @@ class CustomersManager {
         if (searchContainer) {
             searchContainer.style.display = 'block';
         }
+        // Show page title container (Customers heading) on customers view
+        const pageTitleContainer = document.querySelector('.page-title-container');
+        if (pageTitleContainer) {
+            pageTitleContainer.style.display = 'flex';
+        }
         this.currentCustomer = null;
         this.currentReceipt = null;
         this.currentReceiptIndex = null;
@@ -1899,6 +1904,11 @@ class CustomersManager {
         const searchContainer = document.querySelector('.search-container');
         if (searchContainer) {
             searchContainer.style.display = 'none';
+        }
+        // Hide page title container (Customers heading) on receipts view
+        const pageTitleContainer = document.querySelector('.page-title-container');
+        if (pageTitleContainer) {
+            pageTitleContainer.style.display = 'none';
         }
     }
 

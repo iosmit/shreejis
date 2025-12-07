@@ -2,6 +2,9 @@
 // The proxy endpoint (/api/products) fetches from Google Sheets server-side
 const STORE_PRODUCTS_URL = '/api/products';
 
+// Customers CSV URL - using proxy endpoint to keep URL hidden
+const CUSTOMERS_RECEIPTS = '/api/customers-receipts';
+
 
 // Cache keys
 const PRODUCTS_CACHE_KEY = 'storeProductsCache';
@@ -259,7 +262,7 @@ class POSSystem {
             
             // Only fetch if cache is missing, stale, or this is a background refresh (silent=true)
             // Don't fetch if we have fresh cache (already returned above)
-            const response = await fetch('/api/customers?t=' + Date.now());
+            const response = await fetch(`${CUSTOMERS_RECEIPTS}?t=${Date.now()}`);
             if (!response.ok) {
                 console.warn('Failed to load customers for autocomplete');
                 // Try to use cache if fetch fails
