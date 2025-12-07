@@ -1638,32 +1638,45 @@ class CustomersManager {
         
         // Format items for receipt
         const items = receipt.items || [];
-        const itemsText = items.map((item) => {
+        const validItems = items.filter((item) => {
             if (!item || !item.name || item.rate === undefined || item.quantity === undefined) {
-                return null;
+                return false;
             }
+            return true;
+        });
+        
+        const itemsText = validItems.map((item, index) => {
+            // Serial number (1-based)
+            const serialNumber = (index + 1).toString();
             
             // Trim and normalize the item name
             const cleanName = item.name.trim().replace(/\s+/g, ' ');
-            const name = cleanName.length > nameWidth ? cleanName.substring(0, nameWidth - 3) + '...' : cleanName;
+            // Adjust name width to account for serial number (e.g., "1. " = 3 chars)
+            const serialPrefix = `${serialNumber}. `;
+            const availableNameWidth = nameWidth - serialPrefix.length;
+            const name = cleanName.length > availableNameWidth ? cleanName.substring(0, availableNameWidth - 3) + '...' : cleanName;
             const qty = item.quantity.toString();
             const rate = item.rate.toFixed(2);
             const total = (item.rate * item.quantity).toFixed(2);
             
-            // Format: Name (left), then Qty x Rate = Total (right aligned)
-            const namePart = name.padEnd(nameWidth);
+            // Format: Serial Number. Name (left), then Qty x Rate = Total (right aligned)
+            const namePart = name.padEnd(availableNameWidth);
             const qtyPart = qty.padStart(2);
             const ratePart = rate.padStart(rateWidth);
             const totalPart = total.padStart(totalWidth);
             
-            return `${namePart} ${qtyPart} x ${ratePart} = ${totalPart}`;
-        }).filter(line => line !== null).join('\n');
+            return `${serialPrefix}${namePart} ${qtyPart} x ${ratePart} = ${totalPart}`;
+        }).join('\n');
         
         // Format total with proper alignment
+        // Calculate serial prefix width (e.g., "1. " = 3, "10. " = 4, "100. " = 5)
+        const maxSerialNumber = validItems.length;
+        const serialPrefixWidth = maxSerialNumber.toString().length + 2; // number + ". "
         const totalLabel = "Total".padEnd(nameWidth);
         const grandTotal = receipt.grandTotal || 0;
         const totalValueStr = `₹${grandTotal.toFixed(2)}`;
-        const totalLineWidth = nameWidth + 1 + 2 + 1 + 1 + 1 + rateWidth + 1 + 1 + 1 + totalWidth;
+        // Calculate remaining space: serialPrefixWidth + nameWidth + 1 (space) + 2 (qty) + 1 (space) + 1 (x) + 1 (space) + rateWidth + 1 (space) + 1 (=) + 1 (space) + totalWidth
+        const totalLineWidth = serialPrefixWidth + nameWidth + 1 + 2 + 1 + 1 + 1 + rateWidth + 1 + 1 + 1 + totalWidth;
         const totalValue = totalValueStr.padStart(totalLineWidth - nameWidth);
         
         // Build receipt content
