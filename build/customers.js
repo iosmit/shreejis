@@ -1147,18 +1147,17 @@ class CustomersManager {
         if (!modal) {
             modal = document.createElement('div');
             modal.id = 'orderApprovalModal';
-            modal.className = 'modal';
+            modal.className = 'modal receipt-modal';
             modal.innerHTML = `
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h2>Order Approval</h2>
+                <div class="modal-content receipt-modal-content">
+                    <div class="modal-header receipt-modal-header">
+                        <div style="display: flex; gap: 12px;">
+                            <button id="approveOrderBtn" class="btn btn-primary">Approve</button>
+                            <button id="disapproveOrderBtn" class="btn btn-secondary">Disapprove</button>
+                        </div>
                         <button class="close-btn" id="closeOrderApprovalModal">&times;</button>
                     </div>
-                    <div id="orderApprovalContent" style="padding: 0;"></div>
-                    <div class="modal-actions" style="padding: 24px; display: flex; gap: 12px;">
-                        <button id="approveOrderBtn" class="btn btn-primary">Approve</button>
-                        <button id="disapproveOrderBtn" class="btn btn-secondary">Disapprove</button>
-                    </div>
+                    <div id="orderApprovalContent" class="receipt-content"></div>
                 </div>
             `;
             document.body.appendChild(modal);
@@ -1242,22 +1241,17 @@ class CustomersManager {
                 'Order Pending Approval'
             ];
             
-            // Create receipt content element with monospace font (matching index page style)
-            content.innerHTML = '';
-            const receiptContent = document.createElement('div');
-            receiptContent.className = 'receipt-content';
-            receiptContent.style.cssText = 'padding: 32px 28px 32px 28px; font-family: "Courier New", Courier, monospace; font-size: 13px; line-height: 1.9; color: #000000; background: #ffffff; white-space: pre; text-align: left; width: 100%; margin: 0 auto; overflow-x: visible; letter-spacing: 0.1px; min-height: auto;';
-            receiptContent.textContent = receiptLines.join('\n');
-            content.appendChild(receiptContent);
+            // Set receipt content directly (content already has receipt-content class)
+            content.textContent = receiptLines.join('\n');
         }
         
-        modal.classList.add('active');
+        modal.style.display = 'flex';
     }
     
     closeOrderApprovalModal() {
         const modal = document.getElementById('orderApprovalModal');
         if (modal) {
-            modal.classList.remove('active');
+            modal.style.display = 'none';
         }
         this.pendingOrderCustomer = null;
     }
