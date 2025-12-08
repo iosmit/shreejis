@@ -19,6 +19,8 @@ class POSSystem {
         this.products = [];
         this.cart = [];
         this.customers = [];
+        this.specialPrices = {}; // Special prices for current customer
+        this.currentCustomerName = ''; // Track current customer name
         this.cacheRefreshInterval = null;
         this.cacheRefreshTimeout = null;
         this.init();
@@ -525,12 +527,15 @@ class POSSystem {
     }
 
     // Select a customer name from autocomplete
-    selectCustomerName(customerName) {
+    async selectCustomerName(customerName) {
         const customerNameInput = document.getElementById('customerName');
         if (customerNameInput) {
             customerNameInput.value = customerName;
             this.clearCustomerNameResults();
             this.updateCheckoutButtonState();
+            
+            // Load special prices for this customer
+            await this.loadSpecialPrices(customerName);
         }
     }
 
@@ -702,13 +707,31 @@ class POSSystem {
             // Add event listener for customer name input
             const customerNameInput = document.getElementById('customerName');
             if (customerNameInput) {
-                customerNameInput.addEventListener('input', (e) => {
+                customerNameInput.addEventListener('input', async (e) => {
                     this.handleCustomerSearch(e.target.value);
                     this.updateCheckoutButtonState();
+                    
+                    // Load special prices when customer name changes
+                    const customerName = e.target.value.trim();
+                    if (customerName !== this.currentCustomerName) {
+                        await this.loadSpecialPrices(customerName);
+                    }
                 });
                 customerNameInput.addEventListener('blur', () => {
                     // Hide results after a short delay to allow click events
                     setTimeout(() => this.clearCustomerNameResults(), 200);
+                    
+                    // Load special prices for the final customer name value
+                    const customerName = customerNameInput.value.trim();
+                    if (customerName && customerName !== this.currentCustomerName) {
+                        this.loadSpecialPrices(customerName);
+                    } else if (!customerName) {
+                        // Clear special prices if customer name is cleared
+                        this.specialPrices = {};
+                        this.currentCustomerName = '';
+                        this.updateCartPrices();
+                        this.refreshSearchResults();
+                    }
                 });
             }
 
@@ -919,11 +942,12 @@ class POSSystem {
             const stock = product.stock || 0;
             const stockText = stock > 0 ? `Stock: ${stock}` : 'Out of stock';
             const stockClass = stock > 0 ? 'product-stock' : 'product-stock out-of-stock';
+            const effectivePrice = this.getEffectivePrice(product);
             return `
             <div class="search-result-item" data-index="${index}">
                 <span class="product-name">${highlight ? this.highlightMatch(product.name, query) : product.name}</span>
                 <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
-                    <span class="product-rate">₹${product.rate.toFixed(2)}</span>
+                    <span class="product-rate">₹${effectivePrice.toFixed(2)}</span>
                     <span class="${stockClass}">${stockText}</span>
                 </div>
             </div>
@@ -1036,14 +1060,17 @@ class POSSystem {
     }
     
     addToCartWithQuantity(product, quantity) {
+        const effectivePrice = this.getEffectivePrice(product);
         const existingItem = this.cart.find(item => item.name === product.name);
         
         if (existingItem) {
             existingItem.quantity += quantity;
+            // Update rate in case special price changed
+            existingItem.rate = effectivePrice;
         } else {
             this.cart.push({
                 name: product.name,
-                rate: product.rate,
+                rate: effectivePrice,
                 quantity: quantity,
                 purchaseCost: product.purchaseCost || 0,
                 stock: product.stock || 0
@@ -1051,6 +1078,116 @@ class POSSystem {
         }
 
         this.updateCartDisplay();
+    }
+    
+    // Get effective price for a product (special price if available, otherwise regular price)
+    getEffectivePrice(product) {
+        const productName = product.name || '';
+        if (this.specialPrices[productName] !== undefined) {
+            return this.specialPrices[productName];
+        }
+        return product.rate || 0;
+    }
+    
+    // Load special prices for a customer
+    async loadSpecialPrices(customerName) {
+        if (!customerName || !customerName.trim()) {
+            this.specialPrices = {};
+            this.currentCustomerName = '';
+            return;
+        }
+        
+        this.currentCustomerName = customerName.trim();
+        
+        try {
+            const response = await fetch('/api/customer-orders');
+            if (!response.ok) {
+                console.warn('Failed to load customer orders for special prices');
+                this.specialPrices = {};
+                return;
+            }
+            
+            const csvText = await response.text();
+            
+            Papa.parse(csvText, {
+                header: false,
+                skipEmptyLines: true,
+                complete: (results) => {
+                    if (!results.data || results.data.length < 2) {
+                        this.specialPrices = {};
+                        this.updateCartPrices();
+                        this.refreshSearchResults();
+                        return;
+                    }
+                    
+                    // First row is headers, skip it
+                    for (let i = 1; i < results.data.length; i++) {
+                        const row = results.data[i];
+                        if (row.length >= 4) {
+                            const rowCustomerName = String(row[0] || '').trim();
+                            const specialPricesJson = String(row[3] || '').trim();
+                            
+                            if (rowCustomerName.toUpperCase() === this.currentCustomerName.toUpperCase() && specialPricesJson) {
+                                try {
+                                    let pricesData = specialPricesJson;
+                                    if (pricesData.startsWith('"') && pricesData.endsWith('"')) {
+                                        pricesData = pricesData.slice(1, -1);
+                                    }
+                                    pricesData = pricesData.replace(/""/g, '"');
+                                    this.specialPrices = JSON.parse(pricesData);
+                                    this.updateCartPrices();
+                                    this.refreshSearchResults();
+                                    return;
+                                } catch (e) {
+                                    console.error('Error parsing special prices JSON:', e);
+                                    this.specialPrices = {};
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Customer not found or no special prices
+                    this.specialPrices = {};
+                    this.updateCartPrices();
+                    this.refreshSearchResults();
+                },
+                error: (error) => {
+                    console.error('Error parsing customer orders CSV:', error);
+                    this.specialPrices = {};
+                    this.updateCartPrices();
+                    this.refreshSearchResults();
+                }
+            });
+        } catch (error) {
+            console.error('Error loading special prices:', error);
+            this.specialPrices = {};
+            this.updateCartPrices();
+            this.refreshSearchResults();
+        }
+    }
+    
+    // Update cart prices based on current special prices
+    updateCartPrices() {
+        let updated = false;
+        this.cart.forEach(item => {
+            const effectivePrice = this.getEffectivePrice({ name: item.name, rate: item.rate });
+            if (item.rate !== effectivePrice) {
+                item.rate = effectivePrice;
+                updated = true;
+            }
+        });
+        
+        if (updated) {
+            this.updateCartDisplay();
+        }
+    }
+    
+    // Refresh search results to show updated prices
+    refreshSearchResults() {
+        const searchInput = document.getElementById('productSearch');
+        if (searchInput && searchInput.value.trim()) {
+            this.handleSearch(searchInput.value);
+        }
     }
 
     highlightMatch(text, query) {
@@ -1219,6 +1356,9 @@ class POSSystem {
         if (customerNameInput) {
             customerNameInput.value = '';
         }
+        // Clear special prices when cart is cleared
+        this.specialPrices = {};
+        this.currentCustomerName = '';
         this.updateCartDisplay();
     }
 

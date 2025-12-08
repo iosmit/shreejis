@@ -105,6 +105,32 @@ class AuthManager {
         }
         return true;
     }
+    
+    // Restrict access to store pages only (redirect customers to order page)
+    requireStoreAccess() {
+        if (!this.isAuthenticated()) {
+            this.requireAuth();
+            return false;
+        }
+        
+        // If user is a customer, redirect to order page
+        if (this.authType === 'customer') {
+            window.location.href = 'order.html';
+            return false;
+        }
+        
+        return true;
+    }
+    
+    // Check if current user is a customer
+    isCustomer() {
+        return this.isAuthenticated() && this.authType === 'customer';
+    }
+    
+    // Check if current user is store owner
+    isStoreOwner() {
+        return this.isAuthenticated() && this.authType === 'store';
+    }
 
     generateToken() {
         // Generate a simple token (in production, server should generate JWT)

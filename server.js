@@ -512,6 +512,46 @@ app.post('/api/save-order', async (req, res) => {
     }
 });
 
+// Endpoint to update special prices for a customer
+app.post('/api/update-special-prices', async (req, res) => {
+    try {
+        const { customerName, specialPrices } = req.body;
+        
+        if (!customerName) {
+            return res.status(400).json({ success: false, error: 'Customer name is required' });
+        }
+
+        const sheetsWebhookUrl = process.env.SHEETS_WEBHOOK_URL;
+        
+        if (!sheetsWebhookUrl) {
+            return res.status(500).json({ success: false, error: 'SHEETS_WEBHOOK_URL not configured' });
+        }
+
+        // Send update request to Google Apps Script
+        const response = await fetch(sheetsWebhookUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                action: 'updateSpecialPrices',
+                customerName: customerName,
+                specialPrices: specialPrices || {}
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Failed to update special prices: ${response.status} ${response.statusText}`);
+        }
+
+        const result = await response.json();
+        res.json(result);
+    } catch (error) {
+        console.error('Error updating special prices:', error);
+        res.status(500).json({ success: false, error: error.message || 'Failed to update special prices' });
+    }
+});
+
 // Endpoint to approve or disapprove an order
 app.post('/api/approve-order', async (req, res) => {
     try {

@@ -20,6 +20,7 @@ class OrderSystem {
         this.receipts = [];
         this.pendingOrder = null;
         this.customerName = authManager.customerName || '';
+        this.specialPrices = {}; // Special prices for this customer
         this.cacheRefreshInterval = null;
         this.init();
     }
@@ -43,6 +44,9 @@ class OrderSystem {
         
         // Load pending order
         await this.loadPendingOrder();
+        
+        // Load special prices for this customer
+        await this.loadSpecialPrices();
         
         // Set up periodic cache refresh
         this.setupPeriodicRefresh();
@@ -358,6 +362,25 @@ class OrderSystem {
         await this.loadPendingOrderFromServer(silent);
     }
     
+    // Load special prices for this customer
+    async loadSpecialPrices() {
+        // Special prices are loaded along with pending order in loadPendingOrderFromServer
+        // This method is here for consistency and future use
+        if (Object.keys(this.specialPrices).length === 0) {
+            // If not loaded yet, trigger a load
+            await this.loadPendingOrderFromServer(true);
+        }
+    }
+    
+    // Get effective price for a product (special price if available, otherwise regular price)
+    getEffectivePrice(product) {
+        const productName = product.name || '';
+        if (this.specialPrices[productName] !== undefined) {
+            return this.specialPrices[productName];
+        }
+        return product.rate || 0;
+    }
+    
     async loadPendingOrderFromServer(silent = false) {
         try {
             const response = await fetch(`/api/customer-orders?t=${Date.now()}`);
@@ -390,22 +413,47 @@ class OrderSystem {
                             // First column: customer name
                             // Second column: password
                             // Third column: order JSON
+                            // Fourth column: special prices JSON (optional)
                             const customerName = String(row[0] || '').trim();
                             const orderJson = String(row[2] || '').trim();
+                            const specialPricesJson = String(row[3] || '').trim();
                             
-                            if (customerName && orderJson && customerName.toUpperCase() === this.customerName.toUpperCase()) {
-                                try {
-                                    let orderData = orderJson;
-                                    if (orderData.startsWith('"') && orderData.endsWith('"')) {
-                                        orderData = orderData.slice(1, -1);
+                            if (customerName && customerName.toUpperCase() === this.customerName.toUpperCase()) {
+                                // Load special prices
+                                if (specialPricesJson) {
+                                    try {
+                                        let pricesData = specialPricesJson;
+                                        if (pricesData.startsWith('"') && pricesData.endsWith('"')) {
+                                            pricesData = pricesData.slice(1, -1);
+                                        }
+                                        pricesData = pricesData.replace(/""/g, '"');
+                                        this.specialPrices = JSON.parse(pricesData);
+                                    } catch (e) {
+                                        console.error('Error parsing special prices JSON:', e);
+                                        this.specialPrices = {};
                                     }
-                                    orderData = orderData.replace(/""/g, '"');
-                                    const order = JSON.parse(orderData);
-                                    this.pendingOrder = order;
-                                    break;
-                                } catch (e) {
-                                    console.error('Error parsing pending order JSON:', e);
+                                } else {
+                                    this.specialPrices = {};
                                 }
+                                
+                                // Load pending order
+                                if (orderJson) {
+                                    try {
+                                        let orderData = orderJson;
+                                        if (orderData.startsWith('"') && orderData.endsWith('"')) {
+                                            orderData = orderData.slice(1, -1);
+                                        }
+                                        orderData = orderData.replace(/""/g, '"');
+                                        const order = JSON.parse(orderData);
+                                        this.pendingOrder = order;
+                                    } catch (e) {
+                                        console.error('Error parsing pending order JSON:', e);
+                                        this.pendingOrder = null;
+                                    }
+                                } else {
+                                    this.pendingOrder = null;
+                                }
+                                break;
                             }
                         }
                     }
@@ -1206,11 +1254,13 @@ class OrderSystem {
             const stock = product.stock || 0;
             const stockText = stock > 0 ? `Stock: ${stock}` : 'Out of stock';
             const stockClass = stock > 0 ? 'product-stock' : 'product-stock out-of-stock';
+            const effectivePrice = this.getEffectivePrice(product);
+            const priceDisplay = `<span class="product-rate">₹${effectivePrice.toFixed(2)}</span>`;
             return `
             <div class="search-result-item" data-index="${index}">
                 <span class="product-name">${highlight ? this.highlightMatch(product.name, query) : product.name}</span>
                 <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
-                    <span class="product-rate">₹${product.rate.toFixed(2)}</span>
+                    ${priceDisplay}
                     <span class="${stockClass}">${stockText}</span>
                 </div>
             </div>
@@ -1316,14 +1366,17 @@ class OrderSystem {
     }
     
     addToCartWithQuantity(product, quantity) {
+        const effectivePrice = this.getEffectivePrice(product);
         const existingItem = this.cart.find(item => item.name === product.name);
         
         if (existingItem) {
             existingItem.quantity += quantity;
+            // Update rate in case special price changed
+            existingItem.rate = effectivePrice;
         } else {
             this.cart.push({
                 name: product.name,
-                rate: product.rate,
+                rate: effectivePrice,
                 quantity: quantity,
                 purchaseCost: product.purchaseCost || 0,
                 stock: product.stock || 0

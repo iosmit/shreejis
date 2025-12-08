@@ -1240,8 +1240,8 @@
 
     <script src="auth.js"></script>
     <script>
-        // Check authentication before loading the page
-        if (!authManager.requireAuth() || authManager.authType !== 'customer') {
+        // Check authentication - only customers can access this page
+        if (!authManager.isAuthenticated() || !authManager.isCustomer()) {
             // Redirect to login if not authenticated or not a customer
             window.location.href = 'login.html';
             throw new Error('Customer authentication required');

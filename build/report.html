@@ -437,10 +437,10 @@
     
     <script src="auth.js"></script>
     <script>
-        // Check authentication before loading the page
-        if (!authManager.requireAuth()) {
-            // Redirect will happen in requireAuth, but stop execution here
-            throw new Error('Authentication required');
+        // Check authentication and restrict customer access
+        if (!authManager.requireStoreAccess()) {
+            // Redirect will happen in requireStoreAccess, but stop execution here
+            throw new Error('Store access required');
         }
     </script>
     <script src="report.js"></script>

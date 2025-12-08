@@ -21,6 +21,8 @@ class CustomersManager {
         this.products = []; // Store products for profit margin calculation
         this.pendingOrders = {}; // Map of customer name to order data
         this.pendingOrderCustomer = null; // Customer name for pending order approval
+        this.specialPrices = {}; // Map of customer name to special prices { productName: price }
+        this.currentSpecialPricesCustomer = null; // Customer name for special prices modal
         this.init();
     }
     
@@ -149,8 +151,10 @@ class CustomersManager {
                             // First column: customer name
                             // Second column: password
                             // Third column: order JSON
+                            // Fourth column: special prices JSON (optional)
                             const customerName = String(row[0] || '').trim();
                             const orderJson = String(row[2] || '').trim();
+                            const specialPricesJson = String(row[3] || '').trim();
                             
                             if (customerName && orderJson) {
                                 try {
@@ -164,6 +168,24 @@ class CustomersManager {
                                 } catch (e) {
                                     console.error('Error parsing order JSON for', customerName, ':', e);
                                 }
+                            }
+                            
+                            // Load special prices (column 4)
+                            if (customerName && specialPricesJson) {
+                                try {
+                                    let pricesData = specialPricesJson;
+                                    if (pricesData.startsWith('"') && pricesData.endsWith('"')) {
+                                        pricesData = pricesData.slice(1, -1);
+                                    }
+                                    pricesData = pricesData.replace(/""/g, '"');
+                                    const prices = JSON.parse(pricesData);
+                                    this.specialPrices[customerName] = prices;
+                                } catch (e) {
+                                    console.error('Error parsing special prices JSON for', customerName, ':', e);
+                                    this.specialPrices[customerName] = {};
+                                }
+                            } else if (customerName) {
+                                this.specialPrices[customerName] = {};
                             }
                         }
                     }
@@ -539,6 +561,56 @@ class CustomersManager {
             receiptViewModal.addEventListener('click', (e) => {
                 if (e.target === receiptViewModal) {
                     this.closeReceiptView();
+                }
+            });
+        }
+        
+        // Special prices modal event listeners
+        const closeSpecialPricesModal = document.getElementById('closeSpecialPricesModal');
+        const cancelSpecialPricesBtn = document.getElementById('cancelSpecialPricesBtn');
+        const saveSpecialPricesBtn = document.getElementById('saveSpecialPricesBtn');
+        const addSpecialPriceBtn = document.getElementById('addSpecialPriceBtn');
+        const specialPricesModal = document.getElementById('specialPricesModal');
+        
+        if (closeSpecialPricesModal) {
+            closeSpecialPricesModal.addEventListener('click', () => {
+                this.closeSpecialPricesModal();
+            });
+        }
+        
+        if (cancelSpecialPricesBtn) {
+            cancelSpecialPricesBtn.addEventListener('click', () => {
+                this.closeSpecialPricesModal();
+            });
+        }
+        
+        if (saveSpecialPricesBtn) {
+            saveSpecialPricesBtn.addEventListener('click', () => {
+                this.saveSpecialPrices();
+            });
+        }
+        
+        // Product search in special prices modal
+        const specialPriceProductSearch = document.getElementById('specialPriceProductSearch');
+        if (specialPriceProductSearch) {
+            specialPriceProductSearch.addEventListener('input', (e) => {
+                this.handleSpecialPriceSearch(e.target.value);
+            });
+            
+            // Close search results when clicking outside
+            document.addEventListener('click', (e) => {
+                const searchResults = document.getElementById('specialPriceSearchResults');
+                if (searchResults && !specialPriceProductSearch.contains(e.target) && !searchResults.contains(e.target)) {
+                    searchResults.style.display = 'none';
+                }
+            });
+        }
+        
+        // Close special prices modal when clicking outside
+        if (specialPricesModal) {
+            specialPricesModal.addEventListener('click', (e) => {
+                if (e.target === specialPricesModal) {
+                    this.closeSpecialPricesModal();
                 }
             });
         }
@@ -923,6 +995,9 @@ class CustomersManager {
                                 </div>
                             ` : ''}
                         </div>
+                        <button class="settings-customer-btn" onclick="event.stopPropagation(); customersManager.showSpecialPricesModal('${escapedCustomerName}')" title="Special Prices">
+                            ⚙️
+                        </button>
                         <button class="delete-customer-btn" onclick="event.stopPropagation(); customersManager.deleteCustomer('${escapedCustomerName}')" title="Delete customer">
                             ×
                         </button>
@@ -1431,6 +1506,277 @@ class CustomersManager {
         } catch (error) {
             console.error('Error updating customers cache after delete:', error);
         }
+    }
+    
+    // Show special prices modal for a customer
+    async showSpecialPricesModal(customerName) {
+        this.currentSpecialPricesCustomer = customerName;
+        const modal = document.getElementById('specialPricesModal');
+        const modalTitle = document.getElementById('specialPricesModalTitle');
+        const pricesList = document.getElementById('specialPricesList');
+        
+        if (!modal || !modalTitle || !pricesList) {
+            console.error('Special prices modal elements not found');
+            return;
+        }
+        
+        modalTitle.textContent = `Special Prices - ${this.escapeHtml(customerName)}`;
+        
+        // Load products if not already loaded
+        if (this.products.length === 0) {
+            await this.loadProductsFromCache();
+        }
+        
+        // Get current special prices for this customer
+        const currentPrices = this.specialPrices[customerName] || {};
+        
+        // Render special prices list
+        this.renderSpecialPricesList(pricesList, currentPrices);
+        
+        // Reset search input and hide results
+        const searchInput = document.getElementById('specialPriceProductSearch');
+        const searchResults = document.getElementById('specialPriceSearchResults');
+        if (searchInput) {
+            searchInput.value = '';
+        }
+        if (searchResults) {
+            searchResults.style.display = 'none';
+        }
+        
+        modal.classList.add('active');
+        
+        // Focus on search input
+        if (searchInput) {
+            setTimeout(() => searchInput.focus(), 100);
+        }
+    }
+    
+    // Render special prices list
+    renderSpecialPricesList(container, prices) {
+        const productNames = Object.keys(prices);
+        const allProducts = this.products.map(p => p.name || '').filter(Boolean);
+        
+        container.innerHTML = productNames.map((productName, index) => `
+            <div class="special-price-item" data-product="${this.escapeHtml(productName)}">
+                <input type="text" value="${this.escapeHtml(productName)}" readonly style="flex: 1; background-color: #f0f0f0;">
+                <input type="number" step="0.01" min="0" placeholder="Regular price" value="${prices[productName] || ''}" class="special-price-input">
+                <button type="button" class="remove-btn" onclick="customersManager.removeSpecialPriceItem(this)">×</button>
+            </div>
+        `).join('');
+        
+        // Add empty row for new entries
+        if (productNames.length === 0) {
+            container.innerHTML = '<p style="color: #666; text-align: center; padding: 20px;">No special prices set. Click "Add Product" to add one.</p>';
+        }
+    }
+    
+    // Remove a special price item
+    removeSpecialPriceItem(button) {
+        const item = button.closest('.special-price-item');
+        if (item) {
+            item.remove();
+        }
+    }
+    
+    // Handle product search in special prices modal
+    handleSpecialPriceSearch(query) {
+        const searchResultsDiv = document.getElementById('specialPriceSearchResults');
+        if (!searchResultsDiv) return;
+        
+        if (!this.products || this.products.length === 0) {
+            searchResultsDiv.style.display = 'none';
+            return;
+        }
+        
+        if (!query.trim()) {
+            searchResultsDiv.style.display = 'none';
+            searchResultsDiv.innerHTML = '';
+            return;
+        }
+        
+        const queryLower = query.toLowerCase();
+        const searchResults = this.products.filter(product => {
+            const productName = (product.name || '').toLowerCase();
+            return productName.includes(queryLower);
+        });
+        
+        if (searchResults.length === 0) {
+            searchResultsDiv.style.display = 'none';
+            return;
+        }
+        
+        // Get already added products
+        const pricesList = document.getElementById('specialPricesList');
+        const existingProducts = Array.from(pricesList.querySelectorAll('.special-price-item input[type="text"]'))
+            .map(input => input.value.trim())
+            .filter(Boolean);
+        
+        // Filter out already added products
+        const availableResults = searchResults.filter(product => 
+            !existingProducts.includes(product.name)
+        );
+        
+        if (availableResults.length === 0) {
+            searchResultsDiv.innerHTML = '<div style="padding: 12px 16px; color: #666; text-align: center;">All matching products already have special prices set.</div>';
+            searchResultsDiv.style.display = 'block';
+            return;
+        }
+        
+        // Display search results
+        searchResultsDiv.innerHTML = availableResults.slice(0, 20).map((product, index) => {
+            return `
+                <div class="special-price-search-result-item" data-product-name="${this.escapeHtml(product.name)}" data-product-rate="${product.rate || 0}">
+                    <span class="product-name">${this.highlightMatch(product.name, query)}</span>
+                    <span class="product-rate">₹${(product.rate || 0).toFixed(2)}</span>
+                </div>
+            `;
+        }).join('');
+        
+        searchResultsDiv.style.display = 'block';
+        
+        // Add click handlers
+        searchResultsDiv.querySelectorAll('.special-price-search-result-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const productName = item.dataset.productName;
+                const productRate = parseFloat(item.dataset.productRate) || 0;
+                this.addSpecialPriceItem(productName, productRate);
+                
+                // Clear search
+                const searchInput = document.getElementById('specialPriceProductSearch');
+                if (searchInput) {
+                    searchInput.value = '';
+                }
+                searchResultsDiv.style.display = 'none';
+            });
+        });
+    }
+    
+    // Highlight match in search results
+    highlightMatch(text, query) {
+        const regex = new RegExp(`(${query})`, 'gi');
+        return text.replace(regex, '<mark>$1</mark>');
+    }
+    
+    // Add a new special price item
+    addSpecialPriceItem(productName, regularPrice = 0) {
+        const pricesList = document.getElementById('specialPricesList');
+        if (!pricesList) return;
+        
+        // Check if product already exists
+        const existingProducts = Array.from(pricesList.querySelectorAll('.special-price-item input[type="text"]'))
+            .map(input => input.value.trim())
+            .filter(Boolean);
+        
+        if (existingProducts.includes(productName)) {
+            alert('This product already has a special price set.');
+            return;
+        }
+        
+        const newItem = document.createElement('div');
+        newItem.className = 'special-price-item';
+        newItem.innerHTML = `
+            <input type="text" value="${this.escapeHtml(productName)}" readonly style="flex: 1; background-color: #f0f0f0; padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px;">
+            <span style="padding: 0 8px; color: #666; font-size: 14px;">Regular: ₹${regularPrice.toFixed(2)}</span>
+            <input type="number" step="0.01" min="0" placeholder="Special price" value="${regularPrice > 0 ? regularPrice.toFixed(2) : ''}" class="special-price-input" style="width: 120px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px;">
+            <button type="button" class="remove-btn" onclick="customersManager.removeSpecialPriceItem(this)">×</button>
+        `;
+        
+        // Remove the "no prices" message if it exists
+        const noPricesMsg = pricesList.querySelector('p');
+        if (noPricesMsg) {
+            noPricesMsg.remove();
+        }
+        
+        pricesList.appendChild(newItem);
+        
+        // Focus on the price input
+        const priceInput = newItem.querySelector('.special-price-input');
+        if (priceInput) {
+            setTimeout(() => priceInput.focus(), 50);
+        }
+    }
+    
+    // Save special prices
+    async saveSpecialPrices() {
+        const customerName = this.currentSpecialPricesCustomer;
+        if (!customerName) {
+            return;
+        }
+        
+        const pricesList = document.getElementById('specialPricesList');
+        if (!pricesList) {
+            return;
+        }
+        
+        // Collect special prices from form
+        const specialPrices = {};
+        const items = pricesList.querySelectorAll('.special-price-item');
+        
+        items.forEach(item => {
+            const productInput = item.querySelector('input[type="text"]') || item.querySelector('select');
+            const priceInput = item.querySelector('.special-price-input');
+            
+            if (productInput && priceInput) {
+                const productName = productInput.value.trim();
+                const price = parseFloat(priceInput.value);
+                
+                if (productName && !isNaN(price) && price > 0) {
+                    specialPrices[productName] = price;
+                }
+            }
+        });
+        
+        // Save to Customer Orders sheet via API
+        this.showLoading();
+        try {
+            // Call the update endpoint
+            const updateResponse = await fetch('/api/update-special-prices', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    customerName: customerName,
+                    specialPrices: specialPrices
+                })
+            });
+            
+            if (!updateResponse.ok) {
+                const errorData = await updateResponse.json().catch(() => ({}));
+                throw new Error(errorData.error || `Failed to save special prices: ${updateResponse.status}`);
+            }
+            
+            const result = await updateResponse.json();
+            
+            if (result.success !== false) {
+                // Update local cache
+                this.specialPrices[customerName] = specialPrices;
+                
+                // Reload pending orders to refresh special prices
+                await this.loadPendingOrders();
+                
+                // Close modal
+                this.closeSpecialPricesModal();
+                
+                alert('Special prices saved successfully!');
+            } else {
+                throw new Error(result.error || 'Failed to save special prices');
+            }
+        } catch (error) {
+            console.error('Error saving special prices:', error);
+            alert('Failed to save special prices: ' + error.message);
+        } finally {
+            this.hideLoading();
+        }
+    }
+    
+    // Close special prices modal
+    closeSpecialPricesModal() {
+        const modal = document.getElementById('specialPricesModal');
+        if (modal) {
+            modal.classList.remove('active');
+        }
+        this.currentSpecialPricesCustomer = null;
     }
     
     // Update customers cache after deleting a receipt

@@ -187,6 +187,35 @@
             transform: scale(1.05);
         }
         
+        .settings-customer-btn {
+            position: absolute;
+            top: 12px;
+            right: 44px;
+            background-color: #007bff;
+            color: #ffffff;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            font-size: 14px;
+            line-height: 1;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            z-index: 10;
+        }
+        
+        .settings-customer-btn:hover {
+            background-color: #0056b3;
+            transform: scale(1.1);
+        }
+        
+        .settings-customer-btn:active {
+            transform: scale(0.95);
+        }
+        
         .delete-customer-btn {
             position: absolute;
             top: 12px;
@@ -421,6 +450,89 @@
         
         .modal-body p {
             margin: 0;
+        }
+        
+        .special-price-item {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+        }
+        
+        .special-price-item input[type="text"] {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        
+        .special-price-item input[type="number"] {
+            width: 120px;
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        
+        .special-price-item .remove-btn {
+            background-color: #dc3545;
+            color: #ffffff;
+            border: none;
+            border-radius: 6px;
+            width: 32px;
+            height: 32px;
+            cursor: pointer;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.2s;
+        }
+        
+        .special-price-item .remove-btn:hover {
+            background-color: #c82333;
+        }
+        
+        .special-price-search-result-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #e0e0e0;
+            transition: background-color 0.2s;
+        }
+        
+        .special-price-search-result-item:hover {
+            background-color: #f9f9f9;
+        }
+        
+        .special-price-search-result-item:last-child {
+            border-bottom: none;
+        }
+        
+        .special-price-search-result-item .product-name {
+            flex: 1;
+            font-weight: 500;
+            color: #000000;
+            font-size: 14px;
+        }
+        
+        .special-price-search-result-item .product-rate {
+            color: #000000;
+            font-weight: 600;
+            margin-left: 10px;
+            font-size: 14px;
+        }
+        
+        .special-price-search-result-item mark {
+            background-color: #ffeb3b;
+            padding: 2px 4px;
+            border-radius: 3px;
         }
         
         .close-modal {
@@ -956,12 +1068,49 @@
     
     <script src="auth.js"></script>
     <script>
-        // Check authentication before loading the page
-        if (!authManager.requireAuth()) {
-            // Redirect will happen in requireAuth, but stop execution here
-            throw new Error('Authentication required');
+        // Check authentication and restrict customer access
+        if (!authManager.requireStoreAccess()) {
+            // Redirect will happen in requireStoreAccess, but stop execution here
+            throw new Error('Store access required');
         }
     </script>
+    
+    <!-- Special Prices Modal -->
+    <div id="specialPricesModal" class="modal">
+        <div class="modal-content" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h2 id="specialPricesModalTitle">Special Prices</h2>
+                <button class="close-modal" id="closeSpecialPricesModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom: 16px; color: #666;">Set special prices for this customer. Leave empty to use regular price.</p>
+                
+                <!-- Product Search -->
+                <div style="margin-bottom: 24px; position: relative;">
+                    <input 
+                        type="text" 
+                        id="specialPriceProductSearch" 
+                        placeholder="Search products to add special price..." 
+                        autocomplete="off"
+                        style="width: 100%; padding: 12px 16px; border: 2px solid #000000; border-radius: 8px; font-size: 16px;"
+                    >
+                    <div id="specialPriceSearchResults" style="position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 2px solid #000000; border-top: none; border-radius: 0 0 8px 8px; max-height: 300px; overflow-y: auto; z-index: 1000; display: none; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+                        <!-- Search results will appear here -->
+                    </div>
+                </div>
+                
+                <!-- Special Prices List -->
+                <div id="specialPricesList" style="display: flex; flex-direction: column; gap: 12px;">
+                    <!-- Special prices will be loaded here -->
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" id="cancelSpecialPricesBtn">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveSpecialPricesBtn">Save</button>
+            </div>
+        </div>
+    </div>
+    
     <script src="customers.js"></script>
 </body>
 </html>

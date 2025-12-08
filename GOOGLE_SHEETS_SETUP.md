@@ -12,7 +12,7 @@ This guide will help you set up automatic saving of receipts to Google Sheets.
    - The script will create it automatically if it doesn't exist
 4. The script will automatically add headers if the sheets are new:
    - **Customer Receipts**: **CUSTOMER** (column 1) | **RECEIPT** (column 2, and additional RECEIPT columns as needed)
-   - **Customer Orders**: **CUSTOMER** (column 1) | **PASSWORD** (column 2) | **ORDER** (column 3)
+   - **Customer Orders**: **CUSTOMER** (column 1) | **PASSWORD** (column 2) | **ORDER** (column 3) | **SPECIAL_PRICES** (column 4)
 
 ## Step 2: Create Google Apps Script
 
@@ -35,6 +35,8 @@ function doPost(e) {
       return handleSaveOrder(data);
     } else if (action === 'approveOrder') {
       return handleApproveOrder(data);
+    } else if (action === 'updateSpecialPrices') {
+      return handleUpdateSpecialPrices(data);
     } else {
       // Default action: save receipt
       return handleSaveReceipt(data);
@@ -440,13 +442,21 @@ function handleSaveOrder(data) {
   // Create the sheet if it doesn't exist
   if (!sheet) {
     sheet = spreadsheet.insertSheet('Customer Orders');
-    // Add headers: CUSTOMER | PASSWORD | ORDER
+    // Add headers: CUSTOMER | PASSWORD | ORDER | SPECIAL_PRICES
     sheet.getRange(1, 1).setValue('CUSTOMER');
     sheet.getRange(1, 2).setValue('PASSWORD');
     sheet.getRange(1, 3).setValue('ORDER');
+    sheet.getRange(1, 4).setValue('SPECIAL_PRICES');
     // Make header row bold
-    const headerRange = sheet.getRange(1, 1, 1, 3);
+    const headerRange = sheet.getRange(1, 1, 1, 4);
     headerRange.setFontWeight('bold');
+  } else {
+    // Ensure SPECIAL_PRICES header exists (for existing sheets)
+    const lastCol = sheet.getLastColumn();
+    if (lastCol < 4) {
+      sheet.getRange(1, 4).setValue('SPECIAL_PRICES');
+      sheet.getRange(1, 4).setFontWeight('bold');
+    }
   }
   
   // Get order data
@@ -637,6 +647,79 @@ function handleApproveOrder(data) {
   // Optionally, you can also remove the entire row if you want to clean up
   // Uncomment the next line if you want to delete the row entirely:
   // ordersSheet.deleteRow(customerRow);
+  
+  return ContentService.createTextOutput(JSON.stringify({success: true}))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function handleUpdateSpecialPrices(data) {
+  // Get the specific sheet named "Customer Orders"
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = spreadsheet.getSheetByName('Customer Orders');
+  
+  // Create the sheet if it doesn't exist
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet('Customer Orders');
+    // Add headers: CUSTOMER | PASSWORD | ORDER | SPECIAL_PRICES
+    sheet.getRange(1, 1).setValue('CUSTOMER');
+    sheet.getRange(1, 2).setValue('PASSWORD');
+    sheet.getRange(1, 3).setValue('ORDER');
+    sheet.getRange(1, 4).setValue('SPECIAL_PRICES');
+    // Make header row bold
+    const headerRange = sheet.getRange(1, 1, 1, 4);
+    headerRange.setFontWeight('bold');
+  } else {
+    // Ensure SPECIAL_PRICES header exists (for existing sheets)
+    const lastCol = sheet.getLastColumn();
+    if (lastCol < 4) {
+      sheet.getRange(1, 4).setValue('SPECIAL_PRICES');
+      sheet.getRange(1, 4).setFontWeight('bold');
+    }
+  }
+  
+  // Get customer name and special prices from data
+  const customerName = data.customerName || '';
+  const specialPrices = data.specialPrices || {};
+  
+  if (!customerName) {
+    return ContentService.createTextOutput(JSON.stringify({success: false, error: 'Customer name is required'}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  // Convert special prices object to JSON string
+  const specialPricesJson = JSON.stringify(specialPrices);
+  
+  // Find the customer row (row with customer name in column 1)
+  let customerRow = null;
+  const lastRow = sheet.getLastRow();
+  
+  if (lastRow >= 1) {
+    // Check all rows (starting from row 2, since row 1 is header)
+    for (let i = 2; i <= lastRow; i++) {
+      const rowCustomerName = sheet.getRange(i, 1).getValue();
+      if (rowCustomerName === customerName) {
+        customerRow = i;
+        break;
+      }
+    }
+  }
+  
+  if (customerRow) {
+    // Customer exists - update the special prices in column 4
+    sheet.getRange(customerRow, 4).setValue(specialPricesJson);
+  } else {
+    // New customer - add new row
+    const newCustomerRow = lastRow + 1;
+    
+    // Add customer name in column 1
+    sheet.getRange(newCustomerRow, 1).setValue(customerName);
+    
+    // Password column (column 2) - leave empty (can be set manually)
+    // Order column (column 3) - leave empty
+    
+    // Add special prices in column 4
+    sheet.getRange(newCustomerRow, 4).setValue(specialPricesJson);
+  }
   
   return ContentService.createTextOutput(JSON.stringify({success: true}))
     .setMimeType(ContentService.MimeType.JSON);
@@ -851,13 +934,13 @@ Jane Smith| {"date":"15/11/2025","time":"11:00...     | ...                     
 
 ## Customer Orders Sheet
 
-The **Customer Orders** sheet stores pending orders from customers before they are approved:
+The **Customer Orders** sheet stores pending orders from customers before they are approved, along with customer passwords and special prices:
 
 ### Structure:
 ```
-CUSTOMER  | PASSWORD | ORDER
-John Doe  | pass123  | {"date":"15/11/2025","time":"10:30...}
-Jane Smith| pass456  | {"date":"15/11/2025","time":"11:00...}
+CUSTOMER  | PASSWORD | ORDER                                    | SPECIAL_PRICES
+John Doe  | pass123  | {"date":"15/11/2025","time":"10:30...}   | {"Product1":50.00,"Product2":75.00}
+Jane Smith| pass456  | {"date":"15/11/2025","time":"11:00...}   | {}
 ```
 
 ### Columns:
@@ -869,6 +952,12 @@ Jane Smith| pass456  | {"date":"15/11/2025","time":"11:00...}
 - **ORDER** (column 3): Order JSON (same format as receipt JSON)
   - This column is automatically populated when a customer places an order
   - It's cleared when the order is approved or disapproved
+- **SPECIAL_PRICES** (column 4): Special prices JSON (optional)
+  - Stores special prices for products for this customer
+  - Format: `{"Product Name": price, "Another Product": price}`
+  - Example: `{"Widget A": 45.00, "Widget B": 60.00}`
+  - This column is automatically updated when store owner sets special prices in the customers page
+  - If empty or `{}`, customer sees regular prices
 
 ### How It Works:
 1. **Customer Places Order**: When a customer places an order through the order page, it's saved to the Customer Orders sheet

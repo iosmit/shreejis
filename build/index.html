@@ -1097,15 +1097,10 @@
 
     <script src="auth.js"></script>
     <script>
-        // Check authentication before loading the page
-        if (!authManager.requireAuth()) {
-            // Redirect will happen in requireAuth, but stop execution here
-            throw new Error('Authentication required');
-        }
-        
-        // If user is a customer, redirect to order page
-        if (authManager.authType === 'customer') {
-            window.location.href = 'order.html';
+        // Check authentication and restrict customer access
+        if (!authManager.requireStoreAccess()) {
+            // Redirect will happen in requireStoreAccess, but stop execution here
+            throw new Error('Store access required');
         }
     </script>
     <script src="script.js"></script>
