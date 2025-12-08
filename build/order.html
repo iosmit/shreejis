@@ -114,8 +114,8 @@
             display: none;
         }
         
-        /* Customer Info Section (compact) */
-        .customer-info-section {
+        /* Combined Customer Info Card */
+        .customer-info-card {
             background-color: #ffffff;
             border: 2px solid #000000;
             border-radius: 24px;
@@ -123,8 +123,31 @@
             margin-bottom: 16px;
         }
         
-        .customer-info-section h3 {
+        .customer-info-card h3 {
             font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 24px;
+            color: #000000;
+            border-bottom: none;
+        }
+        
+        .customer-info-card-section {
+            margin-bottom: 24px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        
+        .customer-info-card-section:first-of-type {
+            padding-top: 0;
+            border-top: none;
+        }
+        
+        .customer-info-card-section:last-child {
+            margin-bottom: 0;
+        }
+        
+        .customer-info-card-section h4 {
+            font-size: 16px;
             font-weight: 600;
             margin-bottom: 12px;
             color: #000000;
@@ -154,21 +177,171 @@
             color: #28a745;
         }
         
-        /* Receipts Section (compact) */
-        .receipts-section {
-            background-color: #ffffff;
-            border: 2px solid #000000;
-            border-radius: 24px;
-            padding: 20px;
-            margin-bottom: 16px;
+        .pending-order-content {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
         }
         
-        .receipts-section h3 {
-            font-size: 18px;
+        .pending-order-item {
+            background-color: #ffffff;
+            border: none;
+            border-radius: 12px;
+            padding: 20px;
+            position: relative;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+        }
+        
+        .pending-order-info {
+            flex: 1;
+            min-width: 0;
+            padding-right: 48px;
+        }
+        
+        .pending-order-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+        
+        .pending-order-date {
             font-weight: 600;
-            margin-bottom: 12px;
+            color: #000000;
+            font-size: 16px;
+            margin-bottom: 4px;
+        }
+        
+        .pending-order-time {
+            font-size: 14px;
+            color: #666666;
+            margin-bottom: 8px;
+        }
+        
+        .pending-order-amount {
+            font-size: 18px;
+            font-weight: 700;
             color: #000000;
         }
+        
+        .pending-order-status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            background-color: #fff3cd;
+            color: #856404;
+            margin-top: 8px;
+        }
+        
+        .view-pending-order-btn {
+            position: absolute;
+            bottom: 12px;
+            right: 12px;
+            padding: 8px 16px;
+            border: 2px solid #000000;
+            background: #000000;
+            color: #ffffff;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            font-family: inherit;
+            transition: all 0.2s;
+            white-space: nowrap;
+            z-index: 10;
+        }
+        
+        .view-pending-order-btn:hover {
+            background: #ffffff;
+            color: #000000;
+        }
+        
+        .empty-pending-order {
+            text-align: center;
+            color: #666666;
+            padding: 20px;
+            font-style: italic;
+            font-size: 14px;
+        }
+        
+        .delete-pending-order-btn {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background-color: #dc3545;
+            color: #ffffff;
+            border: none;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            font-size: 18px;
+            line-height: 1;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            z-index: 10;
+            flex-shrink: 0;
+        }
+        
+        .delete-pending-order-btn:hover {
+            background-color: #c82333;
+            transform: scale(1.1);
+        }
+        
+        .delete-pending-order-btn:active {
+            transform: scale(0.95);
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+            color: #ffffff;
+            border: 2px solid #dc3545;
+        }
+        
+        .btn-danger:hover:not(:disabled) {
+            background: #c82333;
+            border-color: #c82333;
+        }
+        
+        .close-modal {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666666;
+            line-height: 1;
+            transition: color 0.2s;
+            padding: 0;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .close-modal:hover {
+            color: #000000;
+        }
+        
+        .modal-body {
+            padding: 24px;
+        }
+        
+        .modal-body p {
+            margin: 0;
+            color: #000000;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+        
+        /* Receipts Section (now part of combined card) */
         
         .receipts-list {
             display: flex;
@@ -932,20 +1105,32 @@
     <div class="main-content">
         <!-- Customer Info View (shown when name button clicked) -->
         <div id="customerInfoView" class="customer-info-view">
-            <!-- Customer Info Section -->
-            <section class="customer-info-section">
+            <!-- Combined Customer Info Card -->
+            <section class="customer-info-card">
                 <h3>Customer Information</h3>
-                <div class="customer-info-row">
-                    <div class="customer-name-display" id="customerNameDisplay">Loading...</div>
-                    <div class="total-unpaid" id="totalUnpaid">₹0.00</div>
+                
+                <!-- Customer Info Section -->
+                <div class="customer-info-card-section">
+                    <div class="customer-info-row">
+                        <div class="customer-name-display" id="customerNameDisplay">Loading...</div>
+                        <div class="total-unpaid" id="totalUnpaid">₹0.00</div>
+                    </div>
                 </div>
-            </section>
-            
-            <!-- Receipts Section -->
-            <section class="receipts-section">
-                <h3>Previous Receipts</h3>
-                <div id="receiptsList" class="receipts-list">
-                    <div class="empty-receipts">Loading receipts...</div>
+                
+                <!-- Pending Order Section -->
+                <div class="customer-info-card-section" id="pendingOrderSection" style="display: none;">
+                    <h4>Pending Order</h4>
+                    <div id="pendingOrderContent" class="pending-order-content">
+                        <div class="empty-pending-order">Loading pending order...</div>
+                    </div>
+                </div>
+                
+                <!-- Receipts Section -->
+                <div class="customer-info-card-section">
+                    <h4>Previous Receipts</h4>
+                    <div id="receiptsList" class="receipts-list">
+                        <div class="empty-receipts">Loading receipts...</div>
+                    </div>
                 </div>
             </section>
         </div>
@@ -1009,6 +1194,40 @@
             <div class="order-content" id="receiptViewContent"></div>
             <div class="modal-actions" style="padding: 24px;">
                 <button id="closeReceiptViewBtn" class="btn btn-primary">Close</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Pending Order View Modal -->
+    <div id="pendingOrderViewModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div style="display: flex; gap: 12px;">
+                    <button id="printPendingOrderView" class="btn btn-primary">Print</button>
+                    <button id="sharePendingOrderView" class="btn btn-secondary">Share</button>
+                </div>
+                <button class="close-btn" id="closePendingOrderView">&times;</button>
+            </div>
+            <div class="order-content" id="pendingOrderViewContent"></div>
+            <div class="modal-actions" style="padding: 24px;">
+                <button id="closePendingOrderViewBtn" class="btn btn-primary">Close</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Delete Confirmation Modal -->
+    <div id="deletePendingOrderModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Delete Pending Order</h2>
+                <button class="close-modal" id="closeDeletePendingOrderModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this pending order? This action cannot be undone.</p>
+            </div>
+            <div class="modal-actions" style="padding: 24px;">
+                <button type="button" class="btn btn-secondary" id="cancelDeletePendingOrderBtn">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeletePendingOrderBtn">Delete</button>
             </div>
         </div>
     </div>

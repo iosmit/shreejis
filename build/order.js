@@ -7,6 +7,10 @@ const CUSTOMERS_RECEIPTS = '/api/customers-receipts';
 // Cache keys
 const PRODUCTS_CACHE_KEY = 'storeProductsCache';
 const PRODUCTS_CACHE_TIMESTAMP_KEY = 'storeProductsCacheTimestamp';
+const PENDING_ORDER_CACHE_KEY = 'pendingOrderCache';
+const PENDING_ORDER_CACHE_TIMESTAMP_KEY = 'pendingOrderCacheTimestamp';
+const RECEIPTS_CACHE_KEY = 'customerReceiptsCache';
+const RECEIPTS_CACHE_TIMESTAMP_KEY = 'customerReceiptsCacheTimestamp';
 const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes in milliseconds
 
 class OrderSystem {
@@ -14,7 +18,9 @@ class OrderSystem {
         this.products = [];
         this.cart = [];
         this.receipts = [];
+        this.pendingOrder = null;
         this.customerName = authManager.customerName || '';
+        this.cacheRefreshInterval = null;
         this.init();
     }
 
@@ -34,6 +40,12 @@ class OrderSystem {
         
         // Load customer receipts
         await this.loadCustomerReceipts();
+        
+        // Load pending order
+        await this.loadPendingOrder();
+        
+        // Set up periodic cache refresh
+        this.setupPeriodicRefresh();
     }
     
     displayCustomerInfo() {
@@ -47,7 +59,79 @@ class OrderSystem {
         }
     }
     
-    async loadCustomerReceipts() {
+    // Check if receipts cache is stale
+    isReceiptsCacheStale() {
+        try {
+            const cacheTimestamp = localStorage.getItem(RECEIPTS_CACHE_TIMESTAMP_KEY);
+            if (!cacheTimestamp) {
+                return true;
+            }
+            const cacheTime = parseInt(cacheTimestamp, 10);
+            const timeSinceCache = Date.now() - cacheTime;
+            const isStale = timeSinceCache >= CACHE_DURATION_MS;
+            return isStale;
+        } catch (error) {
+            console.error('[Receipts] Error checking cache staleness:', error);
+            return true;
+        }
+    }
+    
+    // Load receipts from cache
+    loadReceiptsFromCache() {
+        try {
+            const cachedData = localStorage.getItem(RECEIPTS_CACHE_KEY);
+            if (!cachedData) {
+                return false;
+            }
+            
+            const parsed = JSON.parse(cachedData);
+            // Check if cache is for current customer
+            if (parsed.customerName && parsed.customerName.toUpperCase() === this.customerName.toUpperCase()) {
+                this.receipts = parsed.receipts || [];
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('[Receipts] Error loading from cache:', error);
+            return false;
+        }
+    }
+    
+    // Save receipts to cache
+    saveReceiptsToCache() {
+        try {
+            const cacheData = {
+                customerName: this.customerName,
+                receipts: this.receipts
+            };
+            localStorage.setItem(RECEIPTS_CACHE_KEY, JSON.stringify(cacheData));
+            localStorage.setItem(RECEIPTS_CACHE_TIMESTAMP_KEY, Date.now().toString());
+        } catch (error) {
+            console.error('[Receipts] Error saving to cache:', error);
+        }
+    }
+    
+    async loadCustomerReceipts(silent = false) {
+        // Always try to load from cache first
+        const hasCache = this.loadReceiptsFromCache();
+        
+        if (hasCache) {
+            // Cache exists - check if it's stale
+            const isStale = this.isReceiptsCacheStale();
+            
+            if (!isStale) {
+                // Cache is fresh (less than 5 minutes old) - use it, don't fetch
+                this.displayReceipts();
+                this.calculateTotalUnpaid();
+                return; // Use cached data, don't fetch
+            }
+        }
+        
+        // Only fetch if cache is missing or stale
+        await this.loadCustomerReceiptsFromServer(silent);
+    }
+    
+    async loadCustomerReceiptsFromServer(silent = false) {
         try {
             const response = await fetch(`${CUSTOMERS_RECEIPTS}?t=${Date.now()}`);
             if (!response.ok) {
@@ -62,6 +146,7 @@ class OrderSystem {
                 complete: (results) => {
                     if (!results.data || results.data.length === 0) {
                         this.receipts = [];
+                        this.saveReceiptsToCache();
                         this.displayReceipts();
                         this.calculateTotalUnpaid();
                         return;
@@ -74,6 +159,7 @@ class OrderSystem {
                     
                     if (customerColumnIndex === -1) {
                         this.receipts = [];
+                        this.saveReceiptsToCache();
                         this.displayReceipts();
                         this.calculateTotalUnpaid();
                         return;
@@ -92,6 +178,7 @@ class OrderSystem {
                     
                     if (!customerRowData) {
                         this.receipts = [];
+                        this.saveReceiptsToCache();
                         this.displayReceipts();
                         this.calculateTotalUnpaid();
                         return;
@@ -122,19 +209,23 @@ class OrderSystem {
                     }
                     
                     this.receipts = receipts;
+                    // Save to cache
+                    this.saveReceiptsToCache();
                     this.displayReceipts();
                     this.calculateTotalUnpaid();
                 },
                 error: (error) => {
-                    console.error('Error parsing receipts CSV:', error);
+                    console.error('[Receipts] Error parsing CSV:', error);
                     this.receipts = [];
+                    this.saveReceiptsToCache();
                     this.displayReceipts();
                     this.calculateTotalUnpaid();
                 }
             });
         } catch (error) {
-            console.error('Error loading customer receipts:', error);
+            console.error('[Receipts] Error loading from server:', error);
             this.receipts = [];
+            this.saveReceiptsToCache();
             this.displayReceipts();
             this.calculateTotalUnpaid();
         }
@@ -196,6 +287,569 @@ class OrderSystem {
         if (totalUnpaidEl) {
             totalUnpaidEl.textContent = `Total Unpaid: ₹${this.formatCurrency(totalUnpaid)}`;
             totalUnpaidEl.classList.toggle('zero', totalUnpaid === 0);
+        }
+    }
+    
+    // Check if pending order cache is stale
+    isPendingOrderCacheStale() {
+        try {
+            const cacheTimestamp = localStorage.getItem(PENDING_ORDER_CACHE_TIMESTAMP_KEY);
+            if (!cacheTimestamp) return true;
+            const cacheTime = parseInt(cacheTimestamp, 10);
+            return (Date.now() - cacheTime) >= CACHE_DURATION_MS;
+        } catch (error) {
+            return true;
+        }
+    }
+    
+    // Load pending order from cache
+    loadPendingOrderFromCache() {
+        try {
+            const cachedData = localStorage.getItem(PENDING_ORDER_CACHE_KEY);
+            if (!cachedData) {
+                return false;
+            }
+            
+            const parsed = JSON.parse(cachedData);
+            // Check if cache is for current customer
+            if (parsed.customerName && parsed.customerName.toUpperCase() === this.customerName.toUpperCase()) {
+                // Set pending order (can be null if no pending order exists)
+                this.pendingOrder = parsed.order !== undefined ? parsed.order : null;
+                return true;
+            }
+            // Cache exists but for different customer
+            return false;
+        } catch (error) {
+            console.error('Error loading pending order from cache:', error);
+            return false;
+        }
+    }
+    
+    // Save pending order to cache
+    savePendingOrderToCache() {
+        try {
+            const cacheData = {
+                customerName: this.customerName,
+                order: this.pendingOrder
+            };
+            localStorage.setItem(PENDING_ORDER_CACHE_KEY, JSON.stringify(cacheData));
+            localStorage.setItem(PENDING_ORDER_CACHE_TIMESTAMP_KEY, Date.now().toString());
+        } catch (error) {
+            console.error('Error saving pending order to cache:', error);
+        }
+    }
+    
+    async loadPendingOrder(silent = false) {
+        // Always try to load from cache first
+        const hasCache = this.loadPendingOrderFromCache();
+        
+        if (hasCache) {
+            // Cache exists - check if it's stale
+            const isStale = this.isPendingOrderCacheStale();
+            
+            if (!isStale) {
+                // Cache is fresh (less than 5 minutes old) - use it, don't fetch
+                this.displayPendingOrder();
+                return; // Use cached data, don't fetch
+            }
+        }
+        
+        // Only fetch if cache is missing or stale
+        await this.loadPendingOrderFromServer(silent);
+    }
+    
+    async loadPendingOrderFromServer(silent = false) {
+        try {
+            const response = await fetch(`/api/customer-orders?t=${Date.now()}`);
+            if (!response.ok) {
+                console.warn('Failed to load pending order');
+                this.pendingOrder = null;
+                this.savePendingOrderToCache();
+                this.displayPendingOrder();
+                return;
+            }
+            
+            const csvText = await response.text();
+            this.pendingOrder = null;
+            
+            Papa.parse(csvText, {
+                header: false,
+                skipEmptyLines: true,
+                complete: (results) => {
+                    if (!results.data || results.data.length < 2) {
+                        this.pendingOrder = null;
+                        this.savePendingOrderToCache();
+                        this.displayPendingOrder();
+                        return;
+                    }
+                    
+                    // First row is headers, skip it
+                    for (let i = 1; i < results.data.length; i++) {
+                        const row = results.data[i];
+                        if (row.length >= 3) {
+                            // First column: customer name
+                            // Second column: password
+                            // Third column: order JSON
+                            const customerName = String(row[0] || '').trim();
+                            const orderJson = String(row[2] || '').trim();
+                            
+                            if (customerName && orderJson && customerName.toUpperCase() === this.customerName.toUpperCase()) {
+                                try {
+                                    let orderData = orderJson;
+                                    if (orderData.startsWith('"') && orderData.endsWith('"')) {
+                                        orderData = orderData.slice(1, -1);
+                                    }
+                                    orderData = orderData.replace(/""/g, '"');
+                                    const order = JSON.parse(orderData);
+                                    this.pendingOrder = order;
+                                    break;
+                                } catch (e) {
+                                    console.error('Error parsing pending order JSON:', e);
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Save to cache
+                    this.savePendingOrderToCache();
+                    this.displayPendingOrder();
+                },
+                error: (error) => {
+                    console.error('Error parsing pending order CSV:', error);
+                    this.pendingOrder = null;
+                    this.savePendingOrderToCache();
+                    this.displayPendingOrder();
+                }
+            });
+        } catch (error) {
+            console.error('Error loading pending order:', error);
+            this.pendingOrder = null;
+            this.savePendingOrderToCache();
+            this.displayPendingOrder();
+        }
+    }
+    
+    displayPendingOrder() {
+        const pendingOrderSection = document.getElementById('pendingOrderSection');
+        const pendingOrderContent = document.getElementById('pendingOrderContent');
+        
+        if (!pendingOrderSection || !pendingOrderContent) return;
+        
+        if (!this.pendingOrder) {
+            pendingOrderSection.style.display = 'none';
+            return;
+        }
+        
+        pendingOrderSection.style.display = 'block';
+        
+        const order = this.pendingOrder;
+        const dateStr = order.date || 'N/A';
+        const timeStr = order.time || 'N/A';
+        const grandTotal = order.grandTotal || 0;
+        
+        pendingOrderContent.innerHTML = `
+            <div class="pending-order-item">
+                <div class="pending-order-info">
+                    <div class="pending-order-header">
+                        <div>
+                            <div class="pending-order-date">${this.escapeHtml(dateStr)}</div>
+                            <div class="pending-order-time">${this.escapeHtml(timeStr)}</div>
+                        </div>
+                        <div class="pending-order-amount">₹${this.formatCurrency(grandTotal)}</div>
+                    </div>
+                    <div class="pending-order-status">Pending Approval</div>
+                </div>
+                <button class="delete-pending-order-btn" onclick="orderSystem.showDeletePendingOrderModal()" title="Delete pending order">
+                    ×
+                </button>
+                <button class="view-pending-order-btn" onclick="orderSystem.viewPendingOrder()" title="View pending order">
+                    Check Order
+                </button>
+            </div>
+        `;
+    }
+    
+    showDeletePendingOrderModal() {
+        const modal = document.getElementById('deletePendingOrderModal');
+        if (modal) {
+            modal.classList.add('active');
+        }
+    }
+    
+    closeDeletePendingOrderModal() {
+        const modal = document.getElementById('deletePendingOrderModal');
+        if (modal) {
+            modal.classList.remove('active');
+        }
+    }
+    
+    viewPendingOrder() {
+        if (!this.pendingOrder) {
+            return;
+        }
+        
+        const pendingOrderContent = document.getElementById('pendingOrderViewContent');
+        const modal = document.getElementById('pendingOrderViewModal');
+        
+        if (!pendingOrderContent || !modal) {
+            console.error('Pending order modal elements not found');
+            return;
+        }
+        
+        // Format pending order similar to receipt
+        const storeName = this.pendingOrder.storeName || "SHREEJI'S STORE";
+        const customerName = this.customerName ? this.customerName.toUpperCase() : '';
+        const dateStr = this.pendingOrder.date || 'N/A';
+        const timeStr = this.pendingOrder.time || 'N/A';
+        
+        // Detect mobile screen
+        const isMobile = window.innerWidth <= 768;
+        
+        // Adjust column widths based on screen size
+        const nameWidth = isMobile ? 15 : 22;
+        const rateWidth = isMobile ? 7 : 8;
+        const totalWidth = isMobile ? 8 : 10;
+        const separatorWidth = isMobile ? 35 : 50;
+        
+        // Format items for receipt
+        const items = this.pendingOrder.items || [];
+        const validItems = items.filter((item) => {
+            if (!item || !item.name || item.rate === undefined || item.quantity === undefined) {
+                return false;
+            }
+            return true;
+        });
+        
+        const itemsText = validItems.map((item, index) => {
+            // Serial number (1-based)
+            const serialNumber = (index + 1).toString();
+            
+            // Trim and normalize the item name
+            const cleanName = item.name.trim().replace(/\s+/g, ' ');
+            // Adjust name width to account for serial number (e.g., "1. " = 3 chars)
+            const serialPrefix = `${serialNumber}. `;
+            const availableNameWidth = nameWidth - serialPrefix.length;
+            const name = cleanName.length > availableNameWidth ? cleanName.substring(0, availableNameWidth - 3) + '...' : cleanName;
+            const qty = item.quantity.toString();
+            const rate = item.rate.toFixed(2);
+            const total = (item.rate * item.quantity).toFixed(2);
+            
+            // Format: Serial Number. Name (left), then Qty x Rate = Total (right aligned)
+            const namePart = name.padEnd(availableNameWidth);
+            const qtyPart = qty.padStart(2);
+            const ratePart = rate.padStart(rateWidth);
+            const totalPart = total.padStart(totalWidth);
+            
+            return `${serialPrefix}${namePart} ${qtyPart} x ${ratePart} = ${totalPart}`;
+        }).join('\n');
+        
+        // Format total with proper alignment
+        // Calculate serial prefix width (e.g., "1. " = 3, "10. " = 4, "100. " = 5)
+        const maxSerialNumber = validItems.length;
+        const serialPrefixWidth = maxSerialNumber.toString().length + 2; // number + ". "
+        const totalLabel = "Total".padEnd(nameWidth);
+        const grandTotal = this.pendingOrder.grandTotal || 0;
+        const totalValueStr = `₹${grandTotal.toFixed(2)}`;
+        // Calculate remaining space: serialPrefixWidth + nameWidth + 1 (space) + 2 (qty) + 1 (space) + 1 (x) + 1 (space) + rateWidth + 1 (space) + 1 (=) + 1 (space) + totalWidth
+        const totalLineWidth = serialPrefixWidth + nameWidth + 1 + 2 + 1 + 1 + 1 + rateWidth + 1 + 1 + 1 + totalWidth;
+        const totalValue = totalValueStr.padStart(totalLineWidth - nameWidth);
+        
+        // Build pending order content
+        const orderLines = [
+            storeName,
+            customerName ? `Customer: ${customerName}` : '',
+            '',
+            `Date: ${dateStr}`,
+            `Time: ${timeStr}`,
+            '',
+            '·'.repeat(separatorWidth),
+            isMobile ? 'Item           Qty  Rate    Total' : 'Item                  Qty    Rate      Total',
+            '·'.repeat(separatorWidth),
+            itemsText,
+            '·'.repeat(separatorWidth),
+            `${totalLabel}${totalValue}`,
+            '·'.repeat(separatorWidth),
+            '',
+            'Order Pending Approval'
+        ];
+        
+        pendingOrderContent.textContent = orderLines.join('\n');
+        modal.style.display = 'flex';
+    }
+    
+    closePendingOrderView() {
+        const modal = document.getElementById('pendingOrderViewModal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+    
+    async sharePendingOrderView() {
+        const pendingOrderContent = document.getElementById('pendingOrderViewContent');
+        const modal = document.getElementById('pendingOrderViewModal');
+        
+        if (!pendingOrderContent || !modal) {
+            alert('Pending order not found');
+            return;
+        }
+        
+        // Ensure modal is visible for capture
+        if (modal.style.display === 'none') {
+            modal.style.display = 'flex';
+        }
+        
+        try {
+            // Show loading
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            if (loadingOverlay) {
+                loadingOverlay.style.display = 'flex';
+                const loadingText = loadingOverlay.querySelector('p');
+                if (loadingText) {
+                    loadingText.textContent = 'Generating order image...';
+                }
+            }
+            
+            // Wait a bit for any rendering to complete
+            await new Promise(resolve => setTimeout(resolve, 200));
+            
+            // Temporarily ensure pending order content is fully visible
+            const originalOverflow = pendingOrderContent.style.overflow;
+            const originalOverflowX = pendingOrderContent.style.overflowX;
+            const originalOverflowY = pendingOrderContent.style.overflowY;
+            const originalWidth = pendingOrderContent.style.width;
+            const originalMaxWidth = pendingOrderContent.style.maxWidth;
+            const originalBoxSizing = pendingOrderContent.style.boxSizing;
+            
+            pendingOrderContent.style.overflow = 'visible';
+            pendingOrderContent.style.overflowX = 'visible';
+            pendingOrderContent.style.overflowY = 'visible';
+            pendingOrderContent.style.width = 'auto';
+            pendingOrderContent.style.maxWidth = 'none';
+            pendingOrderContent.style.boxSizing = 'content-box';
+            
+            const modalContent = modal.querySelector('.modal-content');
+            let canvas;
+            
+            if (modalContent) {
+                const originalModalOverflow = modalContent.style.overflow;
+                const originalModalOverflowX = modalContent.style.overflowX;
+                const originalModalWidth = modalContent.style.width;
+                const originalModalMaxWidth = modalContent.style.maxWidth;
+                
+                modalContent.style.overflow = 'visible';
+                modalContent.style.overflowX = 'visible';
+                modalContent.style.width = 'auto';
+                modalContent.style.maxWidth = 'none';
+                
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                const orderWidth = Math.max(
+                    pendingOrderContent.scrollWidth,
+                    pendingOrderContent.offsetWidth,
+                    pendingOrderContent.getBoundingClientRect().width
+                );
+                const orderHeight = Math.max(
+                    pendingOrderContent.scrollHeight,
+                    pendingOrderContent.offsetHeight,
+                    pendingOrderContent.getBoundingClientRect().height
+                );
+                
+                canvas = await html2canvas(pendingOrderContent, {
+                    backgroundColor: '#ffffff',
+                    scale: 2,
+                    logging: false,
+                    useCORS: true,
+                    allowTaint: false,
+                    width: orderWidth,
+                    height: orderHeight,
+                    x: 0,
+                    y: 0,
+                    scrollX: 0,
+                    scrollY: 0
+                });
+                
+                modalContent.style.overflow = originalModalOverflow;
+                modalContent.style.overflowX = originalModalOverflowX;
+                modalContent.style.width = originalModalWidth;
+                modalContent.style.maxWidth = originalModalMaxWidth;
+            } else {
+                const orderWidth = Math.max(
+                    pendingOrderContent.scrollWidth,
+                    pendingOrderContent.offsetWidth,
+                    pendingOrderContent.getBoundingClientRect().width
+                );
+                const orderHeight = Math.max(
+                    pendingOrderContent.scrollHeight,
+                    pendingOrderContent.offsetHeight,
+                    pendingOrderContent.getBoundingClientRect().height
+                );
+                
+                canvas = await html2canvas(pendingOrderContent, {
+                    backgroundColor: '#ffffff',
+                    scale: 2,
+                    logging: false,
+                    useCORS: true,
+                    allowTaint: false,
+                    width: orderWidth,
+                    height: orderHeight
+                });
+            }
+            
+            // Restore pending order content styles
+            pendingOrderContent.style.overflow = originalOverflow;
+            pendingOrderContent.style.overflowX = originalOverflowX;
+            pendingOrderContent.style.overflowY = originalOverflowY;
+            pendingOrderContent.style.width = originalWidth;
+            pendingOrderContent.style.maxWidth = originalMaxWidth;
+            pendingOrderContent.style.boxSizing = originalBoxSizing;
+            
+            // Convert canvas to blob
+            canvas.toBlob(async (blob) => {
+                if (!blob) {
+                    throw new Error('Failed to create image blob');
+                }
+                
+                const file = new File([blob], 'pending-order.jpg', { type: 'image/jpeg' });
+                
+                // Use Web Share API if available
+                if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                    try {
+                        await navigator.share({
+                            title: 'Pending Order',
+                            text: 'Pending Order from Shreeji\'s Store',
+                            files: [file]
+                        });
+                    } catch (shareError) {
+                        if (shareError.name !== 'AbortError') {
+                            console.error('Error sharing:', shareError);
+                            // Fallback to download
+                            this.downloadPendingOrderImage(canvas);
+                        }
+                    }
+                } else {
+                    // Fallback to download
+                    this.downloadPendingOrderImage(canvas);
+                }
+                
+                // Hide loading
+                if (loadingOverlay) {
+                    loadingOverlay.style.display = 'none';
+                    const loadingText = loadingOverlay.querySelector('p');
+                    if (loadingText) {
+                        loadingText.textContent = 'Loading products...';
+                    }
+                }
+            }, 'image/jpeg', 0.95);
+            
+        } catch (error) {
+            console.error('Error sharing pending order:', error);
+            alert('Failed to share pending order. Please try again.');
+            
+            // Hide loading
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            if (loadingOverlay) {
+                loadingOverlay.style.display = 'none';
+                const loadingText = loadingOverlay.querySelector('p');
+                if (loadingText) {
+                    loadingText.textContent = 'Loading products...';
+                }
+            }
+        }
+    }
+    
+    downloadPendingOrderImage(canvas) {
+        const link = document.createElement('a');
+        link.download = 'pending-order.jpg';
+        link.href = canvas.toDataURL('image/jpeg', 0.95);
+        link.click();
+    }
+    
+    async deletePendingOrder() {
+        if (!this.pendingOrder) {
+            return;
+        }
+        
+        this.closeDeletePendingOrderModal();
+        
+        try {
+            const response = await fetch('/api/approve-order', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    customerName: this.customerName,
+                    approved: false
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Failed to delete pending order: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            if (result.success) {
+                this.pendingOrder = null;
+                // Update cache immediately
+                this.savePendingOrderToCache();
+                this.displayPendingOrder();
+            } else {
+                throw new Error(result.error || 'Failed to delete pending order');
+            }
+        } catch (error) {
+            console.error('Error deleting pending order:', error);
+            alert('Failed to delete pending order. Please try again.');
+        }
+    }
+    
+    // Set up periodic refresh every 5 minutes
+    setupPeriodicRefresh() {
+        // Clear any existing interval
+        if (this.cacheRefreshInterval) {
+            clearInterval(this.cacheRefreshInterval);
+        }
+        
+        // Refresh both caches every 5 minutes - flush old cache and replace with fresh data
+        this.cacheRefreshInterval = setInterval(() => {
+            console.log('Periodic cache refresh triggered - flushing and replacing cache');
+            this.flushAndRefreshPendingOrderCache();
+            this.flushAndRefreshReceiptsCache();
+        }, CACHE_DURATION_MS);
+    }
+    
+    // Flush old cache and replace with fresh data
+    async flushAndRefreshPendingOrderCache() {
+        try {
+            // Clear old cache
+            localStorage.removeItem(PENDING_ORDER_CACHE_KEY);
+            localStorage.removeItem(PENDING_ORDER_CACHE_TIMESTAMP_KEY);
+            
+            console.log('Pending order cache flushed, fetching fresh data...');
+            
+            // Fetch fresh data and save to cache
+            await this.loadPendingOrderFromServer(true);
+            
+            console.log('Pending order cache refreshed with fresh data');
+        } catch (error) {
+            console.error('Error flushing and refreshing pending order cache:', error);
+        }
+    }
+    
+    // Flush old receipts cache and replace with fresh data
+    async flushAndRefreshReceiptsCache() {
+        try {
+            // Clear old cache
+            localStorage.removeItem(RECEIPTS_CACHE_KEY);
+            localStorage.removeItem(RECEIPTS_CACHE_TIMESTAMP_KEY);
+            
+            console.log('Receipts cache flushed, fetching fresh data...');
+            
+            // Fetch fresh data and save to cache
+            await this.loadCustomerReceiptsFromServer(true);
+            
+            console.log('Receipts cache refreshed with fresh data');
+        } catch (error) {
+            console.error('Error flushing and refreshing receipts cache:', error);
         }
     }
     
@@ -415,6 +1069,32 @@ class OrderSystem {
             closeReceiptView.addEventListener('click', () => this.closeReceiptView());
         }
         
+        // Delete pending order modal
+        const closeDeletePendingOrderModal = document.getElementById('closeDeletePendingOrderModal');
+        const cancelDeletePendingOrderBtn = document.getElementById('cancelDeletePendingOrderBtn');
+        const confirmDeletePendingOrderBtn = document.getElementById('confirmDeletePendingOrderBtn');
+        
+        if (closeDeletePendingOrderModal) {
+            closeDeletePendingOrderModal.addEventListener('click', () => this.closeDeletePendingOrderModal());
+        }
+        
+        if (cancelDeletePendingOrderBtn) {
+            cancelDeletePendingOrderBtn.addEventListener('click', () => this.closeDeletePendingOrderModal());
+        }
+        
+        if (confirmDeletePendingOrderBtn) {
+            confirmDeletePendingOrderBtn.addEventListener('click', () => this.deletePendingOrder());
+        }
+        
+        const deletePendingOrderModal = document.getElementById('deletePendingOrderModal');
+        if (deletePendingOrderModal) {
+            deletePendingOrderModal.addEventListener('click', (e) => {
+                if (e.target.id === 'deletePendingOrderModal') {
+                    this.closeDeletePendingOrderModal();
+                }
+            });
+        }
+        
         const orderModal = document.getElementById('orderModal');
         if (orderModal) {
             orderModal.addEventListener('click', (e) => {
@@ -429,6 +1109,37 @@ class OrderSystem {
             receiptViewModal.addEventListener('click', (e) => {
                 if (e.target.id === 'receiptViewModal') {
                     this.closeReceiptView();
+                }
+            });
+        }
+        
+        // Pending order view modal
+        const printPendingOrderViewBtn = document.getElementById('printPendingOrderView');
+        const sharePendingOrderViewBtn = document.getElementById('sharePendingOrderView');
+        const closePendingOrderViewBtn = document.getElementById('closePendingOrderViewBtn');
+        const closePendingOrderView = document.getElementById('closePendingOrderView');
+        
+        if (printPendingOrderViewBtn) {
+            printPendingOrderViewBtn.addEventListener('click', () => window.print());
+        }
+        
+        if (sharePendingOrderViewBtn) {
+            sharePendingOrderViewBtn.addEventListener('click', () => this.sharePendingOrderView());
+        }
+        
+        if (closePendingOrderViewBtn) {
+            closePendingOrderViewBtn.addEventListener('click', () => this.closePendingOrderView());
+        }
+        
+        if (closePendingOrderView) {
+            closePendingOrderView.addEventListener('click', () => this.closePendingOrderView());
+        }
+        
+        const pendingOrderViewModal = document.getElementById('pendingOrderViewModal');
+        if (pendingOrderViewModal) {
+            pendingOrderViewModal.addEventListener('click', (e) => {
+                if (e.target.id === 'pendingOrderViewModal') {
+                    this.closePendingOrderView();
                 }
             });
         }
@@ -449,6 +1160,10 @@ class OrderSystem {
                 // Switch to customer info view
                 customerInfoView.classList.add('active');
                 cartView.classList.add('hidden');
+                // Load pending order (uses cache if available and fresh, otherwise fetches)
+                this.loadPendingOrder(true);
+                // Reload receipts
+                this.loadCustomerReceipts();
             }
         }
     }
@@ -834,6 +1549,8 @@ class OrderSystem {
         this.clearCart();
         // Reload receipts to show updated data
         this.loadCustomerReceipts();
+        // Reload pending order
+        this.loadPendingOrder();
     }
     
     async shareOrder() {
@@ -1046,6 +1763,27 @@ class OrderSystem {
             const result = await response.json();
             if (result.success !== false) {
                 console.log('Order saved to Google Sheets:', result);
+                
+                // Update pending order cache immediately
+                // Create pending order object from orderData
+                this.pendingOrder = {
+                    date: orderData.date,
+                    time: orderData.time,
+                    customerName: orderData.customerName,
+                    items: orderData.items,
+                    grandTotal: orderData.grandTotal,
+                    profitMargin: orderData.profitMargin,
+                    storeName: orderData.storeName,
+                    payments: {
+                        cash: 0,
+                        online: 0
+                    },
+                    remainingBalance: orderData.grandTotal
+                };
+                
+                // Save to cache immediately
+                this.savePendingOrderToCache();
+                this.displayPendingOrder();
             } else {
                 console.error('Google Sheets returned error:', result.error);
             }
