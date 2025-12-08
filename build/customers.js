@@ -1121,7 +1121,7 @@ class CustomersManager {
                             ` : ''}
                         </div>
                         <button class="settings-customer-btn" onclick="event.stopPropagation(); customersManager.showSpecialPricesModal('${escapedCustomerName}')" title="Special Prices">
-                            ⚙
+                            ₹
                         </button>
                         <button class="delete-customer-btn" onclick="event.stopPropagation(); customersManager.deleteCustomer('${escapedCustomerName}')" title="Delete customer">
                             ×
@@ -1679,20 +1679,26 @@ class CustomersManager {
     // Render special prices list
     renderSpecialPricesList(container, prices) {
         const productNames = Object.keys(prices);
-        const allProducts = this.products.map(p => p.name || '').filter(Boolean);
         
-        container.innerHTML = productNames.map((productName, index) => `
+        if (productNames.length === 0) {
+            container.innerHTML = '<p style="color: #666; text-align: center; padding: 20px;">No special prices set. Search for a product above to add one.</p>';
+            return;
+        }
+        
+        container.innerHTML = productNames.map((productName, index) => {
+            // Find the product to get regular price
+            const product = this.products.find(p => p.name === productName);
+            const regularPrice = product ? (product.rate || 0) : 0;
+            
+            return `
             <div class="special-price-item" data-product="${this.escapeHtml(productName)}">
-                <input type="text" value="${this.escapeHtml(productName)}" readonly style="flex: 1; background-color: #f0f0f0;">
-                <input type="number" step="0.01" min="0" placeholder="Regular price" value="${prices[productName] || ''}" class="special-price-input">
+                <input type="text" value="${this.escapeHtml(productName)}" readonly style="flex: 1; background-color: #f0f0f0; padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px;">
+                <span style="padding: 0 8px; color: #666; font-size: 14px; white-space: nowrap;">Regular: ₹${regularPrice.toFixed(2)}</span>
+                <input type="number" step="0.01" min="0" placeholder="Special price" value="${prices[productName] || ''}" class="special-price-input" style="width: 120px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px;">
                 <button type="button" class="remove-btn" onclick="customersManager.removeSpecialPriceItem(this)">×</button>
             </div>
-        `).join('');
-        
-        // Add empty row for new entries
-        if (productNames.length === 0) {
-            container.innerHTML = '<p style="color: #666; text-align: center; padding: 20px;">No special prices set. Click "Add Product" to add one.</p>';
-        }
+        `;
+        }).join('');
     }
     
     // Remove a special price item
@@ -1801,7 +1807,7 @@ class CustomersManager {
         newItem.className = 'special-price-item';
         newItem.innerHTML = `
             <input type="text" value="${this.escapeHtml(productName)}" readonly style="flex: 1; background-color: #f0f0f0; padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px;">
-            <span style="padding: 0 8px; color: #666; font-size: 14px;">Regular: ₹${regularPrice.toFixed(2)}</span>
+            <span style="padding: 0 8px; color: #666; font-size: 14px; white-space: nowrap;">Regular: ₹${regularPrice.toFixed(2)}</span>
             <input type="number" step="0.01" min="0" placeholder="Special price" value="${regularPrice > 0 ? regularPrice.toFixed(2) : ''}" class="special-price-input" style="width: 120px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px;">
             <button type="button" class="remove-btn" onclick="customersManager.removeSpecialPriceItem(this)">×</button>
         `;
