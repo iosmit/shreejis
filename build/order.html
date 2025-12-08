@@ -964,8 +964,6 @@
         /* Receipt View Modal Styles */
         .receipt-modal {
             z-index: 2000;
-            align-items: center;
-            justify-content: center;
         }
         
         .receipt-modal.active,
@@ -1003,6 +1001,27 @@
         .receipt-modal-header .btn {
             flex: 0 0 auto;
             max-width: 200px;
+        }
+        
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666666;
+            line-height: 1;
+            transition: color 0.2s;
+            padding: 0;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: 16px;
+        }
+        
+        .close-btn:hover {
+            color: #000000;
         }
         
         .receipt-content {
@@ -1188,21 +1207,11 @@
                 overflow: visible;
             }
             
-            .order-content,
-            #receiptViewContent,
-            #pendingOrderViewContent {
-                font-size: 10pt;
-                padding: 0;
-                max-width: 100%;
-                line-height: 1.5;
-                overflow: visible;
-            }
-            
-            #receiptViewModal,
-            #receiptViewModal *,
-            #pendingOrderViewModal,
-            #pendingOrderViewModal * {
-                visibility: visible;
+            /* Hide all other page elements */
+            .header,
+            .main-content,
+            .loading-overlay {
+                display: none !important;
             }
             
             /* Hide all other page elements */
