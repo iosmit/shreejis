@@ -968,7 +968,8 @@
         
         .receipt-modal.active,
         .receipt-modal[style*="flex"],
-        #receiptViewModal[style*="flex"] {
+        #receiptViewModal[style*="flex"],
+        #pendingOrderViewModal[style*="flex"] {
             display: flex !important;
         }
         
@@ -1186,7 +1187,8 @@
             }
             
             .order-content,
-            #receiptViewContent {
+            #receiptViewContent,
+            #pendingOrderViewContent {
                 font-size: 10pt;
                 padding: 0;
                 max-width: 100%;
@@ -1195,7 +1197,9 @@
             }
             
             #receiptViewModal,
-            #receiptViewModal * {
+            #receiptViewModal *,
+            #pendingOrderViewModal,
+            #pendingOrderViewModal * {
                 visibility: visible;
             }
             
@@ -1312,19 +1316,16 @@
     </div>
     
     <!-- Pending Order View Modal -->
-    <div id="pendingOrderViewModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
+    <div id="pendingOrderViewModal" class="modal receipt-modal">
+        <div class="modal-content receipt-modal-content">
+            <div class="modal-header receipt-modal-header">
                 <div style="display: flex; gap: 12px;">
                     <button id="printPendingOrderView" class="btn btn-primary">Print</button>
                     <button id="sharePendingOrderView" class="btn btn-secondary">Share</button>
                 </div>
                 <button class="close-btn" id="closePendingOrderView">&times;</button>
             </div>
-            <div class="order-content" id="pendingOrderViewContent"></div>
-            <div class="modal-actions" style="padding: 24px;">
-                <button id="closePendingOrderViewBtn" class="btn btn-primary">Close</button>
-            </div>
+            <div class="receipt-content" id="pendingOrderViewContent"></div>
         </div>
     </div>
     

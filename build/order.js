@@ -1159,7 +1159,6 @@ class OrderSystem {
         // Pending order view modal
         const printPendingOrderViewBtn = document.getElementById('printPendingOrderView');
         const sharePendingOrderViewBtn = document.getElementById('sharePendingOrderView');
-        const closePendingOrderViewBtn = document.getElementById('closePendingOrderViewBtn');
         const closePendingOrderView = document.getElementById('closePendingOrderView');
         
         if (printPendingOrderViewBtn) {
@@ -1168,10 +1167,6 @@ class OrderSystem {
         
         if (sharePendingOrderViewBtn) {
             sharePendingOrderViewBtn.addEventListener('click', () => this.sharePendingOrderView());
-        }
-        
-        if (closePendingOrderViewBtn) {
-            closePendingOrderViewBtn.addEventListener('click', () => this.closePendingOrderView());
         }
         
         if (closePendingOrderView) {
