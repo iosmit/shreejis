@@ -1030,10 +1030,19 @@
                 padding: 8px 16px;
             }
             
+            .receipt-modal {
+                padding: 0;
+                align-items: flex-start;
+                justify-content: center;
+            }
+            
             .receipt-modal-content {
-                width: 95%;
-                margin: 2% auto;
-                max-height: 95vh;
+                width: 100%;
+                max-width: 100%;
+                margin: 0;
+                max-height: 100vh;
+                height: 100vh;
+                border-radius: 0;
                 overflow-y: auto;
                 overflow-x: hidden;
                 -webkit-overflow-scrolling: touch;
@@ -1051,6 +1060,11 @@
             
             .receipt-modal-header {
                 padding: 16px;
+                position: sticky;
+                top: 0;
+                background-color: #ffffff;
+                z-index: 10;
+                border-bottom: 1px solid #e0e0e0;
             }
         }
         
