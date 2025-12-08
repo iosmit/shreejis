@@ -232,7 +232,6 @@
                         placeholder="Enter password"
                         required
                         autocomplete="current-password"
-                        autofocus
                     >
                 </div>
                 <button type="submit" class="submit-btn" id="loginBtn">Continue</button>
@@ -315,8 +314,12 @@
             }
         });
         
-        // Focus password input on load
-        passwordInput.focus();
+        // Focus password input on load (after a short delay to avoid autofocus warning)
+        setTimeout(() => {
+            if (document.activeElement === document.body || document.activeElement === null) {
+                passwordInput.focus();
+            }
+        }, 100);
     </script>
 </body>
 </html>
