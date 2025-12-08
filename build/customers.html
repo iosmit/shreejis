@@ -504,23 +504,23 @@
         @media (max-width: 768px) {
             #specialPricesModal {
                 align-items: flex-start;
-                padding-top: 10px;
+                padding-top: 5px;
             }
             
             #specialPricesModal .modal-content {
                 max-width: 100%;
-                width: calc(100% - 20px);
-                margin: 10px auto;
-                max-height: calc(100vh - 20px);
-                padding: 16px;
+                width: calc(100% - 16px);
+                margin: 8px auto;
+                max-height: calc(100vh - 16px);
+                padding: 12px;
                 border-radius: 12px;
                 -webkit-overflow-scrolling: touch;
                 overflow-y: auto;
             }
             
             #specialPricesModal .modal-header {
-                padding: 8px 0 12px 0;
-                margin-bottom: 12px;
+                padding: 4px 0 8px 0;
+                margin-bottom: 8px;
                 position: sticky;
                 top: 0;
                 background-color: #ffffff;
@@ -528,15 +528,16 @@
             }
             
             #specialPricesModal .modal-header h2 {
-                font-size: 20px;
+                font-size: 18px;
+                font-weight: 700;
             }
             
             #specialPricesModal .close-modal {
-                font-size: 28px;
-                width: 36px;
-                height: 36px;
-                min-width: 36px;
-                min-height: 36px;
+                font-size: 24px;
+                width: 32px;
+                height: 32px;
+                min-width: 32px;
+                min-height: 32px;
             }
             
             #specialPricesModal .modal-body {
@@ -545,66 +546,71 @@
             }
             
             #specialPricesModal .modal-body p {
-                font-size: 14px;
-                margin-bottom: 12px;
+                font-size: 13px;
+                margin-bottom: 10px;
                 line-height: 1.4;
             }
             
             #specialPriceProductSearch {
                 font-size: 16px !important; /* Prevents zoom on iOS */
-                padding: 14px 16px !important;
+                padding: 10px 12px !important;
                 border-width: 2px !important;
+                border-radius: 8px !important;
             }
             
             #specialPriceSearchResults {
-                max-height: 250px !important;
+                max-height: 200px !important;
                 font-size: 14px;
                 -webkit-overflow-scrolling: touch;
             }
             
             .special-price-search-result-item {
-                padding: 14px 16px;
-                min-height: 48px; /* Better touch target */
+                padding: 10px 12px;
+                min-height: 44px; /* Tactile touch target */
                 -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
             }
             
             #specialPricesList {
-                gap: 12px !important;
+                gap: 8px !important;
             }
             
             .special-price-item {
                 flex-direction: column;
                 align-items: stretch;
-                gap: 10px;
-                padding: 16px;
+                gap: 8px;
+                padding: 12px;
                 border-width: 2px;
+                border-radius: 8px;
             }
             
             .special-price-item input[type="text"] {
                 width: 100% !important;
-                padding: 14px 16px !important;
+                padding: 10px 12px !important;
                 font-size: 16px !important; /* Prevents zoom on iOS */
                 border-width: 2px;
+                border-radius: 6px;
             }
             
             .special-price-item input[type="number"] {
                 width: 100% !important;
-                padding: 14px 16px !important;
+                padding: 10px 12px !important;
                 font-size: 16px !important; /* Prevents zoom on iOS */
                 border-width: 2px;
+                border-radius: 6px;
             }
             
             .special-price-item .remove-btn {
                 width: 100%;
-                height: 48px; /* Better touch target */
-                font-size: 22px;
-                margin-top: 4px;
+                height: 40px; /* Compact but tactile */
+                font-size: 20px;
+                margin-top: 2px;
+                border-radius: 6px;
                 -webkit-tap-highlight-color: rgba(220, 53, 69, 0.2);
             }
             
             .special-price-item span {
-                font-size: 14px;
-                padding: 8px 0 4px 0;
+                font-size: 13px;
+                padding: 4px 0 2px 0;
                 width: 100%;
                 text-align: left;
                 display: block;
@@ -615,24 +621,37 @@
             }
             
             #specialPricesModal .modal-actions {
-                flex-direction: column;
-                gap: 12px;
-                padding-top: 16px;
-                margin-top: 16px;
-                position: sticky;
-                bottom: 0;
-                background-color: #ffffff;
-                border-top: 1px solid #e0e0e0;
+                flex-direction: row;
+                gap: 8px;
+                padding-top: 0;
+                margin-top: 0;
+                position: relative;
+                border-top: none;
                 padding-bottom: 0;
+                margin-bottom: 16px;
             }
             
             #specialPricesModal .modal-actions .btn {
-                width: 100%;
-                padding: 16px;
-                font-size: 16px;
-                min-height: 48px; /* Better touch target */
+                flex: 1;
+                padding: 10px 16px;
+                font-size: 14px;
+                min-height: 40px; /* Compact but tactile */
                 font-weight: 600;
+                border-radius: 8px;
+                border-width: 2px;
                 -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+            }
+            
+            #specialPricesModal .modal-actions .btn-primary {
+                background-color: #000000;
+                color: #ffffff;
+                border: 2px solid #000000;
+            }
+            
+            #specialPricesModal .modal-actions .btn-secondary {
+                background-color: #ffffff;
+                color: #000000;
+                border: 2px solid #000000;
             }
         }
         
@@ -1225,7 +1244,7 @@
                 <p style="margin-bottom: 16px; color: #666;">Set special prices for this customer. Leave empty to use regular price.</p>
                 
                 <!-- Product Search -->
-                <div style="margin-bottom: 24px; position: relative;">
+                <div style="margin-bottom: 16px; position: relative;">
                     <input 
                         type="text" 
                         id="specialPriceProductSearch" 
@@ -1238,14 +1257,16 @@
                     </div>
                 </div>
                 
+                <!-- Action Buttons -->
+                <div class="modal-actions" style="margin-top: 0; padding-top: 0; border-top: none;">
+                    <button type="button" class="btn btn-secondary" id="cancelSpecialPricesBtn">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="saveSpecialPricesBtn">Save</button>
+                </div>
+                
                 <!-- Special Prices List -->
-                <div id="specialPricesList" style="display: flex; flex-direction: column; gap: 12px;">
+                <div id="specialPricesList" style="display: flex; flex-direction: column; gap: 12px; margin-top: 24px;">
                     <!-- Special prices will be loaded here -->
                 </div>
-            </div>
-            <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" id="cancelSpecialPricesBtn">Cancel</button>
-                <button type="button" class="btn btn-primary" id="saveSpecialPricesBtn">Save</button>
             </div>
         </div>
     </div>
