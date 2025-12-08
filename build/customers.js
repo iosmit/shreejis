@@ -1152,8 +1152,8 @@ class CustomersManager {
                 <div class="modal-content receipt-modal-content">
                     <div class="modal-header receipt-modal-header">
                         <div style="display: flex; gap: 12px;">
-                            <button id="approveOrderBtn" class="btn btn-primary">Approve</button>
-                            <button id="disapproveOrderBtn" class="btn btn-secondary">Disapprove</button>
+                            <button id="approveOrderBtn" class="btn btn-primary">Accept</button>
+                            <button id="disapproveOrderBtn" class="btn btn-secondary">Decline</button>
                         </div>
                         <button class="close-btn" id="closeOrderApprovalModal">&times;</button>
                     </div>
