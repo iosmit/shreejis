@@ -1121,7 +1121,7 @@ class CustomersManager {
                             ` : ''}
                         </div>
                         <button class="settings-customer-btn" onclick="event.stopPropagation(); customersManager.showSpecialPricesModal('${escapedCustomerName}')" title="Special Prices">
-                            ⚙️
+                            ⚙
                         </button>
                         <button class="delete-customer-btn" onclick="event.stopPropagation(); customersManager.deleteCustomer('${escapedCustomerName}')" title="Delete customer">
                             ×
